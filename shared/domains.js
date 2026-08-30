@@ -43,23 +43,16 @@ export function isDomain(value) {
 
 // Which domain each game writes into. Mirrors GAME_TO_DOMAIN on the server.
 //
-// The legacy four are un-collapsed here: `memory` and `name-recall` both used
-// to write into memory, which blended two unrelated tasks into one number.
-// SPRINT 4 retires the legacy entries.
+// A game type IS a domain now. The legacy four were retired in Sprint 4 --
+// `memory` and `name-recall` used to both write into memory, which blended two
+// unrelated tasks into a single number.
 export const GAME_TO_DOMAIN = {
-  // built in Sprint 4, one per domain
   attention: DOMAIN_ATTENTION,
   sequencing: DOMAIN_EXECUTIVE,
   recall: DOMAIN_MEMORY,
   naming: DOMAIN_LANGUAGE,
   shapes: DOMAIN_PERCEPTUAL_MOTOR,
   faces: DOMAIN_SOCIAL,
-
-  // playable today
-  memory: DOMAIN_MEMORY,
-  routine: DOMAIN_EXECUTIVE,
-  objects: DOMAIN_LANGUAGE,
-  "name-recall": DOMAIN_SOCIAL,
 };
 
 /** Domain a game writes into, or null for a game we do not recognise. */

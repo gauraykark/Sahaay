@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider, RequireRole } from "./lib/auth";
 
 import ItemPreview from "./pages/ItemPreview";
+import PlayDomain from "./pages/PlayDomain";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import PatientHome from "./pages/PatientHome";
@@ -11,10 +12,6 @@ import CaregiverDashboard from "./pages/CaregiverDashboard";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import PatientClinicalView from "./pages/PatientClinicalView";
 
-import MemoryGame from "./components/games/MemoryGame";
-import RoutineGame from "./components/games/RoutineGame";
-import ObjectsGame from "./components/games/ObjectsGame";
-import NameRecallGame from "./components/games/NameRecallGame";
 
 function App() {
   return (
@@ -32,10 +29,11 @@ function App() {
               and that is the PIN plus the server's role checks. */}
           <Route path="/patient" element={<PatientHome />} />
           <Route path="/patient/vault" element={<MemoryVault />} />
-          <Route path="/patient/game/memory" element={<MemoryGame />} />
-          <Route path="/patient/game/routine" element={<RoutineGame />} />
-          <Route path="/patient/game/objects" element={<ObjectsGame />} />
-          <Route path="/patient/game/name-recall" element={<NameRecallGame />} />
+
+          {/* One route for all six domains. The four /patient/game/* routes
+              are gone with the games that owned them. */}
+          <Route path="/patient/play" element={<PlayDomain />} />
+          <Route path="/patient/play/:domain" element={<PlayDomain />} />
 
           {/* CAREGIVER — the PIN gate lives inside the component and stays as
               a local convenience lock. The server still checks the role. */}

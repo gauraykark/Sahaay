@@ -5,6 +5,7 @@
 //
 // Run from the repo root:  node tools/test_levels.mjs
 
+import * as levels from "../shared/levels.js";
 import {
   MAX_LEVEL,
   MIN_LEVEL,
@@ -22,6 +23,11 @@ const failed = [];
 function check(name, got, want) {
   if (Object.is(got, want)) passed.push(name);
   else failed.push(`${name}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+}
+
+function ok(name, condition, detail = "") {
+  if (condition) passed.push(name);
+  else failed.push(detail ? `${name}: ${detail}` : name);
 }
 
 check("scale floor is 0", MIN_LEVEL, 0);
@@ -64,24 +70,20 @@ check("clamp does not limit step size", clampLevel(12), 12);
 check("steps up by one", stepBounded(9, 2, "objects"), 3);
 check("steps down by one", stepBounded(0, 4, "objects"), 3);
 check("holds when proposal equals current", stepBounded(3, 3, "objects"), 3);
-check("caps at the bank ceiling", stepBounded(9, 4, "memory"), 4);
-check("never goes below MIN_LEVEL", stepBounded(-5, 0, "memory"), 0);
-check("uncalibrated current: bounds only, no step limit", stepBounded(9, null, "objects"), 5);
-check("no proposal leaves the patient where they are", stepBounded(null, 3, "memory"), 3);
-check("no proposal and uncalibrated stays uncalibrated", stepBounded(null, null, "memory"), null);
-check("unknown game type is bounded by MAX_LEVEL", contentMaxLevel("social"), MAX_LEVEL);
-check("unknown game type still gets the step limit", stepBounded(9, 1, "social"), 2);
+check("no ceiling below MAX_LEVEL any more", contentMaxLevel("memory"), MAX_LEVEL);
+check("unknown game types are bounded by MAX_LEVEL", contentMaxLevel("anything"), MAX_LEVEL);
+ok(
+  "CONTENT_MAX_LEVEL is gone (Sprint 4 deleted the legacy banks)",
+  levels.CONTENT_MAX_LEVEL === undefined,
+  "the table is still exported and will silently cap the scale"
+);
+check("a step up near the ceiling is allowed", stepBounded(15, 14, "recall"), 15);
+check("MAX_LEVEL is reachable", stepBounded(99, 14, "faces"), 15);
 
-// The top of every bank must stay reachable -- `bankSize - 1` would not.
-check("memory level 4 reachable", stepBounded(4, 3, "memory"), 4);
-check("routine level 4 reachable", stepBounded(4, 3, "routine"), 4);
-check("objects level 5 reachable", stepBounded(5, 4, "objects"), 5);
-check("name-recall level 5 reachable", stepBounded(5, 4, "name-recall"), 5);
-
-// A level stored above the ceiling is an impossible state; correcting it may
-// take more than one step, but only downward.
-check("above-ceiling level corrects down to playable", stepBounded(16, 15, "memory"), 4);
-check("the correction is downward only", stepBounded(15, 15, "memory"), 4);
+// Nothing sits above MAX_LEVEL any more, so the old downward correction is
+// simply a clamp.
+check("above the scale clamps to the top", stepBounded(16, 15, "recall"), 15);
+check("holding at the top holds", stepBounded(15, 15, "recall"), 15);
 
 for (const name of passed) console.log(`  PASS  ${name}`);
 for (const line of failed) console.log(`  FAIL  ${line}`);

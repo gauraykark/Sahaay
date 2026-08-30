@@ -84,43 +84,20 @@ def first_level(*candidates: object) -> int | None:
     return UNCALIBRATED
 
 
-# ── Content ceiling ─────────────────────────────────────────────────────────
-#
-#                        >>> REMOVE IN SPRINT 3 <<<
-#
-# Mirror of CONTENT_MAX_LEVEL in shared/levels.js. See that file for the full
-# reasoning; the short version is that MAX_LEVEL is 15 but the level banks are
-# still the fixed arrays sized for the old 1-5 scale, and deleting LEVEL_BOUNDS
-# removed the guard that kept a proposed level inside them.
-#
-# These are the HIGHEST LEVEL EACH BANK SERVES, not the entry count. The banks
-# are 1-indexed, so a 4-entry bank serves levels 1-4 and its ceiling is 4.
-#
-# REMOVE IN SPRINT 3, alongside its JavaScript mirror. When the parameterised
-# generator replaces the fixed arrays, every level 0-15 is servable on demand
-# and this ceiling stops existing -- step_bounded() must then clamp to
-# MAX_LEVEL alone. If the table survives the generator it silently caps the new
-# 0-15 scale at 5, which looks exactly like a patient who stopped improving.
-CONTENT_MAX_LEVEL = {
-    "memory": 4,        # MEMORY_GRIDS keys 1-4 (2x2 .. 4x4)
-    "routine": 4,       # ROUTINE_LEVELS, 4 scenarios, 4-16 steps
-    "objects": 5,       # objectsQuestionCount caps at 5 (25 questions)
-    "name-recall": 5,   # NAME_RECALL_CIRCLES, levels 1-5
-}
+# The content ceiling is GONE. CONTENT_MAX_LEVEL existed only because the
+# legacy banks were fixed arrays; those games were deleted in Sprint 4 and
+# every item now covers 0-15. step_bounded clamps to MAX_LEVEL alone.
 
 
-def content_max_level(game_type: str) -> int:
-    """Highest level ``game_type``'s bank serves, or MAX_LEVEL if it has none."""
-    ceiling = CONTENT_MAX_LEVEL.get(game_type)
-    if ceiling is None:
-        return MAX_LEVEL
-    return min(MAX_LEVEL, ceiling)
+def content_max_level(game_type: str | None = None) -> int:
+    """Kept for callers that still pass a game type. Always MAX_LEVEL."""
+    return MAX_LEVEL
 
 
 def step_bounded(
     proposed: int | float | None,
     current: int | float | None,
-    game_type: str,
+    game_type: str | None = None,
 ) -> int | None:
     """Bound a proposed level: at most one step from current, then into range.
 
@@ -151,4 +128,4 @@ def step_bounded(
         nxt = min(nxt, frm + 1)
         nxt = max(nxt, frm - 1)
 
-    return max(MIN_LEVEL, min(content_max_level(game_type), nxt))
+    return max(MIN_LEVEL, min(MAX_LEVEL, nxt))

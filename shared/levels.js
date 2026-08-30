@@ -61,68 +61,36 @@ export function levelOrNull(value) {
   return Number.isFinite(n) ? clampLevel(n) : UNCALIBRATED;
 }
 
-// ── Content ceiling ─────────────────────────────────────────────────────────
+// The content ceiling is GONE, as Sprint 3 promised and Sprint 4 delivered.
 //
-//                        >>> REMOVE IN SPRINT 3 <<<
+// CONTENT_MAX_LEVEL existed only because the legacy banks were fixed arrays
+// that could not serve a level they had no entry for. Those games are deleted;
+// every item is now generated or selected from a bank that covers 0-15. A
+// ceiling here would silently cap the scale, and a patient pinned at a ceiling
+// reads exactly like a patient who stopped improving.
 //
-// MAX_LEVEL is 15, but the level banks are still the old fixed arrays sized
-// for the 1-5 scale. Deleting LEVEL_BOUNDS removed the guard that kept a
-// proposed level inside what the banks can actually serve, so this replaces
-// it -- in one place, imported by both sides, rather than the two drifting
-// copies it replaces.
-//
-// These are the HIGHEST LEVEL EACH BANK SERVES, not the entry count. The
-// banks are 1-indexed (MEMORY_GRIDS starts at key 1, getRoutineForLevel maps
-// level-1 to an array index), so a 4-entry bank serves levels 1 through 4 and
-// its ceiling is 4, not 3. Capping at `entries - 1` would lock out the top
-// level of every game -- including ROUTINE_LEVELS[3], "A full day at home",
-// which is the exact content LEVEL_BOUNDS made unreachable the first time.
-//
-// A game type that is not listed has no bank ceiling and is bounded by
-// MAX_LEVEL alone. That is deliberate: the six DSM-5 domains arriving in
-// Sprint 4 are generated from the difficulty formula and have no fixed bank.
-//
-// REMOVE IN SPRINT 3. When difficultyFor(level) replaces the fixed arrays,
-// every level 0-15 is servable on demand and this ceiling stops existing --
-// stepBounded() must then clamp to MAX_LEVEL alone. If the table survives the
-// generator it silently caps the new 0-15 scale at 5, which looks exactly like
-// a patient who stopped improving. tools/check_level_parity.py fails the
-// moment difficultyFor exists while this table still does.
-export const CONTENT_MAX_LEVEL = {
-  memory: 4, // MEMORY_GRIDS keys 1-4 (2x2 .. 4x4)
-  routine: 4, // ROUTINE_LEVELS, 4 scenarios, 4-16 steps
-  objects: 5, // objectsQuestionCount caps at 5 (25 questions)
-  "name-recall": 5, // NAME_RECALL_CIRCLES, levels 1-5
-};
+// stepBounded now clamps to MAX_LEVEL alone.
 
-/** Highest level `gameType`'s bank can serve, or MAX_LEVEL if it has no bank. */
-export function contentMaxLevel(gameType) {
-  const ceiling = CONTENT_MAX_LEVEL[gameType];
-  return ceiling === undefined ? MAX_LEVEL : Math.min(MAX_LEVEL, ceiling);
+/** Kept for callers that still pass a game type. Always MAX_LEVEL. */
+export function contentMaxLevel() {
+  return MAX_LEVEL;
 }
 
 /**
  * Bound a proposed level: at most one step from where the patient is now, then
- * into [MIN_LEVEL, whatever the content can serve].
+ * into [MIN_LEVEL, MAX_LEVEL].
  *
- * The step limit is here, in ONE definition both runtimes import, because the
- * two independent +/-1 clamps this replaces had already drifted apart and made
- * real content unreachable. It is an interim guard on the per-round coach --
- * the clinical rule it stands in for is "max +/-1 per domain per week", which
- * belongs to the weekly evaluator in Sprint 6. When that lands, this stops
- * being called per round.
+ * The step limit lives here, in ONE definition both runtimes import, because
+ * the two independent +/-1 clamps this replaced had already drifted apart and
+ * made real content unreachable. It is an interim guard on the per-round
+ * coach; the clinical rule it stands in for is "max +/-1 per domain per week",
+ * which belongs to the weekly evaluator in Sprint 6.
  *
- * The content ceiling is a HARD clamp applied after the step limit, so it can
- * move a level down by more than one step -- but only downward, and only for a
- * patient already stored above what their game can serve. That is a one-time
- * correction of an impossible state, not adaptation: there is no level-9 memory
- * board to hand them. It disappears with the ceiling in Sprint 3.
- *
- * An uncalibrated `current` imposes no step limit (there is nothing to step
- * from), only the bounds. A proposal that is not a usable number leaves the
+ * An uncalibrated `current` imposes no step limit -- there is nothing to step
+ * from -- only the bounds. A proposal that is not a usable number leaves the
  * patient where they are rather than inventing a level.
  */
-export function stepBounded(proposed, current, gameType) {
+export function stepBounded(proposed, current) {
   const from = levelOrNull(current);
   let next = levelOrNull(proposed);
 
@@ -133,7 +101,7 @@ export function stepBounded(proposed, current, gameType) {
     if (next < from - 1) next = from - 1;
   }
 
-  return Math.max(MIN_LEVEL, Math.min(contentMaxLevel(gameType), next));
+  return Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, next));
 }
 
 // ── The difficulty formula ──────────────────────────────────────────────────

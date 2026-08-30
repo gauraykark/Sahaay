@@ -118,7 +118,7 @@ db.add(patient)
 db.flush()
 
 now = datetime.now(timezone.utc).replace(tzinfo=None)
-for i, game in enumerate(GAME_TYPES):
+for i, game in enumerate(GAME_TYPES[:-1]):
     for day in range(8):
         db.add(GameSession(
             patient_id=patient.id, game_type=game, domain=domain_for_game(game),
@@ -147,10 +147,11 @@ ok("prompt input has six domain lines", len(domain_lines) == 6)
 for domain in DOMAINS:
     ok(f"prompt input mentions {domain}", DOMAIN_LABELS[domain] in block)
 ok(
-    "unmeasured domains are sent as 'no data', not 0%",
-    block.count("no data") == 2,
-    f"got {block.count('no data')} -- attention and perceptual-motor should both be unmeasured",
+    "an unmeasured domain is sent as 'no data', never 0%",
+    block.count("no data") == 1,
+    f"got {block.count('no data')} for one deliberately unplayed domain",
 )
+ok("0% never stands in for 'not measured'", ": 0%" not in block, block)
 print("\n  --- prompt input actually sent ---")
 print(block)
 print()
@@ -161,11 +162,7 @@ print()
 rule = agents._rule_report(db, patient, "doctor", 30, "en")
 rule_text = " ".join([rule["summary"], *rule["trends"], *rule["observations"], *rule["suggestions"]])
 covered = [d for d in DOMAINS if DOMAIN_LABELS[d].lower() in rule_text.lower()]
-ok(
-    "offline report names all six domains",
-    len(covered) == 6,
-    f"named only {covered}",
-)
+ok("offline report names all six domains", len(covered) == 6, f"named only {covered}")
 for old in ("Object Recognition", "Daily Routine"):
     ok(f"offline report drops the old label {old!r}", old not in rule_text)
 

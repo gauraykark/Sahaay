@@ -73,13 +73,10 @@ TARGET_GAME_TYPES = [
     "faces",             # which face is happy?
 ]
 
-# GAME_TYPES means "what the client can actually run", and it is still the
-# legacy four. Everything that iterates games -- the coach, the seeder -- wants
-# this one, because querying for a game nobody can play returns nothing and a
-# coach with no data is a coach that says nothing.
-#
-# SPRINT 4: delete this list and set GAME_TYPES = TARGET_GAME_TYPES.
-GAME_TYPES = ["memory", "routine", "objects", "name-recall"]
+# The legacy four are gone as of Sprint 4 -- their components, their routes and
+# lib/difficulty.js were deleted together. A game type IS a domain now: the
+# client plays /patient/play/<domain> and sends the domain with every row.
+GAME_TYPES = TARGET_GAME_TYPES
 
 GAME_LABELS = {
     "attention": "Attention",
@@ -88,11 +85,6 @@ GAME_LABELS = {
     "naming": "Naming Things",
     "shapes": "Shapes and Space",
     "faces": "Faces and Feelings",
-    # legacy
-    "memory": "Memory Matching",
-    "routine": "Daily Routine",
-    "objects": "Object Recognition",
-    "name-recall": "Name Recall",
 }
 
 # A game writes into exactly one domain.
@@ -103,16 +95,6 @@ GAME_TO_DOMAIN = {
     "naming": DOMAIN_LANGUAGE,
     "shapes": DOMAIN_PERCEPTUAL_MOTOR,
     "faces": DOMAIN_SOCIAL,
-
-    # Legacy games, un-collapsed. "memory" and "name-recall" both used to write
-    # into memory, which is why the Memory score blended two unrelated tasks.
-    # They now separate: the matching board is learning and memory; naming a
-    # person from their relationship is person-knowledge, which is social
-    # cognition (and is what My People's Test scores into from Sprint 9).
-    "memory": DOMAIN_MEMORY,
-    "routine": DOMAIN_EXECUTIVE,
-    "objects": DOMAIN_LANGUAGE,
-    "name-recall": DOMAIN_SOCIAL,
 }
 
 

@@ -6,10 +6,6 @@ import { useAuth } from "../lib/auth";
 import { useT, langToLocale } from "../lib/i18n";
 import {
   SignOut,
-  Cards,
-  ListChecks,
-  MagnifyingGlass,
-  UserCircle,
   Heart,
   Sun,
 } from "@phosphor-icons/react";
@@ -128,39 +124,25 @@ export default function PatientHome() {
           {t("choose_activity")}
         </p>
 
-        {/* Activity list — Memory Vault first, per the revised priority
-            order in SPEC_ADDENDUM_MEMORY_VAULT.md: the Vault + voice
-            companion is the core feature, games are one tool among several. */}
-        <div className="space-y-3">
+        {/* PLAY is the main thing, and it is one button. The five-card list
+            that used to be here made the patient choose a game before they
+            could start, which is a decision they should never have to make.
+            Sprint 5 turns this into the real session runner (two sessions a
+            day, all six domains, four-hour gap); for now it opens one domain,
+            rotating by day so it is not the same one every time. */}
+        <div className="space-y-4">
+          <Link
+            to="/patient/play"
+            className="block w-full text-center bg-primary text-white rounded-3xl py-12 text-4xl font-medium"
+          >
+            {t("play")}
+          </Link>
+
           <ActivityCard
             icon={Heart}
             title={t("people_you_know")}
             description={t("people_desc")}
             to="/patient/vault"
-          />
-          <ActivityCard
-            icon={Cards}
-            title={t("memory_matching")}
-            description={t("memory_desc")}
-            to="/patient/game/memory"
-          />
-          <ActivityCard
-            icon={ListChecks}
-            title={t("daily_routine")}
-            description={t("routine_desc")}
-            to="/patient/game/routine"
-          />
-          <ActivityCard
-            icon={MagnifyingGlass}
-            title={t("object_recognition")}
-            description={t("objects_desc")}
-            to="/patient/game/objects"
-          />
-          <ActivityCard
-            icon={UserCircle}
-            title={t("name_recall")}
-            description={t("name_recall_desc")}
-            to="/patient/game/name-recall"
           />
         </div>
       </main>

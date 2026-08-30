@@ -63,16 +63,16 @@ check("exactly six domains", DOMAINS, DSM5)
 check("nothing is derived any more", DERIVED_DOMAINS, [])
 ok("every domain has a clinician label", all(d in DOMAIN_LABELS for d in DOMAINS))
 
-# The two collapses being undone.
-ok(
-    "memory and name-recall no longer share a domain",
-    GAME_TO_DOMAIN["memory"] != GAME_TO_DOMAIN["name-recall"],
-    f'both map to {GAME_TO_DOMAIN["memory"]}',
-)
-check("routine is executive function", domain_for_game("routine"), "executive")
-check("objects is language", domain_for_game("objects"), "language")
-check("name-recall is social cognition", domain_for_game("name-recall"), "social")
-check("memory is memory", domain_for_game("memory"), "memory")
+# The collapse being undone: memory and name-recall used to share a domain.
+# Both are gone as of Sprint 4, so the guarantee is now structural -- each of
+# the six games maps to its own distinct domain.
+mapped = [GAME_TO_DOMAIN[g] for g in GAME_TYPES]
+ok("no two games share a domain", len(set(mapped)) == len(mapped), f"{mapped}")
+check("sequencing is executive", domain_for_game("sequencing"), "executive")
+check("naming is language", domain_for_game("naming"), "language")
+check("faces is social cognition", domain_for_game("faces"), "social")
+check("recall is memory", domain_for_game("recall"), "memory")
+check("the legacy game types are gone", domain_for_game("name-recall"), None)
 
 # An unknown game must not silently inflate memory.
 check("unknown game type resolves to None", domain_for_game("does-not-exist"), None)
@@ -81,13 +81,8 @@ ok(
     "the six target games cover all six domains, one each",
     sorted(GAME_TO_DOMAIN[g] for g in TARGET_GAME_TYPES) == sorted(DOMAINS),
 )
-check(
-    "PLAYABLE_DOMAINS is what the legacy four can reach",
-    PLAYABLE_DOMAINS,
-    ["executive", "memory", "language", "social"],
-)
-ok("attention is not playable yet", "attention" not in PLAYABLE_DOMAINS)
-ok("perceptual_motor is not playable yet", "perceptual_motor" not in PLAYABLE_DOMAINS)
+# Every domain is playable now that all six games exist.
+check("every domain is playable", PLAYABLE_DOMAINS, DSM5)
 
 ok(
     "attention_score is gone",
@@ -150,10 +145,10 @@ for domain in PLAYABLE_DOMAINS:
        f'got {by_domain[domain]["score"]}')
 
 # The point of deleting attention_score: an unmeasured domain says so.
-for domain in ("attention", "perceptual_motor"):
-    check(f"{domain} has no score, not a synthesised one", by_domain[domain]["score"], None)
-    check(f"{domain} reports zero sessions", by_domain[domain]["sessions"], 0)
-    check(f"{domain} trend is unknown", by_domain[domain]["trend"], "unknown")
+# A domain with no sessions says so rather than reporting a synthesised score.
+empty_domain_scores = analytics.domain_scores(db, empty.id, [])
+for entry in empty_domain_scores:
+    check(f"{entry['domain']} has no score when unplayed", entry["score"], None)
 
 # Memory and social must differ now -- they were one number before.
 ok(

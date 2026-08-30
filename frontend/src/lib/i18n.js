@@ -45,6 +45,51 @@ const strings = {
     domain_perceptual_motor: "Shapes and Space",
     domain_social: "People and Feelings",
 
+    // ── Games ──────────────────────────────────────────────────────────────
+    // Every string a patient can see during play. Nothing here may describe a
+    // mistake: no "wrong", no "incorrect", no score. See the errorless rule.
+    play: "Play",
+    stop: "Stop",
+    well_done_today: "Well done today",
+    thats_it: "That's it",
+    lets_look_together: "Let's look at this one together",
+    next: "Next",
+    ready: "Ready?",
+    start: "Start",
+    remember_these: "Look at these",
+    now_answer: "Now, a question",
+
+    ask_which_did_you_see: "Which one did you see?",
+    ask_what_is_this: "What is this called?",
+    ask_how_feeling: (pronoun) => `How is ${pronoun} feeling?`,
+    ask_put_in_order: "Put these in the order you do them",
+    ask_match_shape: "Tap the shape that matches",
+    ask_tap_green: "Tap the green circle. Leave the red one",
+
+    he: "he",
+    she: "she",
+
+    emotion_angry: "Angry",
+    emotion_calm: "Calm",
+    emotion_happy: "Happy",
+    emotion_sad: "Sad",
+    emotion_surprised: "Surprised",
+    emotion_worried: "Worried",
+
+    obj_banana: "Banana", obj_basket: "Basket", obj_bicycle: "Bicycle",
+    obj_bucket: "Bucket", obj_clock: "Clock", obj_coconut: "Coconut",
+    obj_comb: "Comb", obj_cow: "Cow", obj_fish: "Fish",
+    obj_jackfruit: "Jackfruit", obj_kettle: "Kettle", obj_lamp: "Lamp",
+    obj_plate: "Plate", obj_pot: "Pot", obj_rice: "Rice",
+    obj_slippers: "Slippers", obj_soap: "Soap", obj_spoon: "Spoon",
+    obj_teacup: "Teacup", obj_umbrella: "Umbrella",
+
+    shape_circle: "Circle", shape_square: "Square", shape_triangle: "Triangle",
+    shape_diamond: "Diamond", shape_hexagon: "Hexagon", shape_star: "Star",
+
+    next_games_at: (time) => `Next games at ${time}`,
+    come_back_later: "You have played today. Come back later.",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}. Welcome back. Choose an activity when you are ready.`,
@@ -88,6 +133,47 @@ const strings = {
     domain_perceptual_motor: "आकार और स्थान",
     domain_social: "लोग और भावनाएँ",
 
+    // ── Games ──────────────────────────────────────────────────────────────
+    // UNVERIFIED — needs native review. Machine-written, never checked by a
+    // Hindi speaker. See the note on the domain names above.
+    play: "खेलें",
+    stop: "रुकें",
+    well_done_today: "आज बहुत अच्छा किया",
+    thats_it: "यही है",
+    lets_look_together: "आइए इसे साथ में देखें",
+    next: "आगे",
+    ready: "तैयार हैं?",
+    start: "शुरू करें",
+    remember_these: "इन्हें देखिए",
+    now_answer: "अब, एक सवाल",
+
+    ask_which_did_you_see: "आपने कौन सा देखा था?",
+    ask_what_is_this: "इसे क्या कहते हैं?",
+    ask_how_feeling: (pronoun) => `${pronoun} कैसा महसूस कर रहे हैं?`,
+    ask_put_in_order: "इन्हें उसी क्रम में रखें जैसे आप करते हैं",
+    ask_match_shape: "मिलती-जुलती आकृति पर टैप करें",
+    ask_tap_green: "हरे गोले पर टैप करें। लाल को छोड़ दें",
+
+    he: "वह",
+    she: "वह",
+
+    emotion_angry: "गुस्सा", emotion_calm: "शांत", emotion_happy: "खुश",
+    emotion_sad: "उदास", emotion_surprised: "हैरान", emotion_worried: "चिंतित",
+
+    obj_banana: "केला", obj_basket: "टोकरी", obj_bicycle: "साइकिल",
+    obj_bucket: "बाल्टी", obj_clock: "घड़ी", obj_coconut: "नारियल",
+    obj_comb: "कंघी", obj_cow: "गाय", obj_fish: "मछली",
+    obj_jackfruit: "कटहल", obj_kettle: "केतली", obj_lamp: "दीपक",
+    obj_plate: "थाली", obj_pot: "बर्तन", obj_rice: "चावल",
+    obj_slippers: "चप्पल", obj_soap: "साबुन", obj_spoon: "चम्मच",
+    obj_teacup: "चाय का कप", obj_umbrella: "छाता",
+
+    shape_circle: "गोल", shape_square: "चौकोर", shape_triangle: "तिकोना",
+    shape_diamond: "चौकोन", shape_hexagon: "षटकोण", shape_star: "तारा",
+
+    next_games_at: (time) => `अगले खेल ${time} बजे`,
+    come_back_later: "आपने आज खेल लिया है। बाद में आइए।",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। वापसी पर स्वागत है। तैयार होने पर एक गतिविधि चुनें।`,
@@ -130,6 +216,47 @@ const strings = {
     domain_language: "শব্দ আৰু নাম",
     domain_perceptual_motor: "আকৃতি আৰু স্থান",
     domain_social: "মানুহ আৰু অনুভৱ",
+
+    // ── Games ──────────────────────────────────────────────────────────────
+    // UNVERIFIED — needs native review. Machine-written, never checked by an
+    // Assamese speaker. See the note on the domain names above.
+    play: "খেলক",
+    stop: "ৰওক",
+    well_done_today: "আজি বৰ ভাল কৰিলে",
+    thats_it: "এইটোৱেই",
+    lets_look_together: "আহক একেলগে চাওঁ",
+    next: "পিছৰটো",
+    ready: "সাজু নেকি?",
+    start: "আৰম্ভ কৰক",
+    remember_these: "এইবোৰ চাওক",
+    now_answer: "এতিয়া, এটা প্ৰশ্ন",
+
+    ask_which_did_you_see: "আপুনি কোনটো দেখিছিল?",
+    ask_what_is_this: "ইয়াক কি বোলে?",
+    ask_how_feeling: (pronoun) => `${pronoun} কেনে অনুভৱ কৰিছে?`,
+    ask_put_in_order: "আপুনি যিদৰে কৰে সেই ক্ৰমত ৰাখক",
+    ask_match_shape: "মিল খোৱা আকৃতিটোত টিপক",
+    ask_tap_green: "সেউজীয়া বৃত্তত টিপক। ৰঙাটো এৰি দিয়ক",
+
+    he: "তেওঁ",
+    she: "তেওঁ",
+
+    emotion_angry: "খং", emotion_calm: "শান্ত", emotion_happy: "সুখী",
+    emotion_sad: "দুখী", emotion_surprised: "আচৰিত", emotion_worried: "চিন্তিত",
+
+    obj_banana: "কল", obj_basket: "পাচি", obj_bicycle: "চাইকেল",
+    obj_bucket: "বালটি", obj_clock: "ঘড়ী", obj_coconut: "নাৰিকল",
+    obj_comb: "ফণী", obj_cow: "গৰু", obj_fish: "মাছ",
+    obj_jackfruit: "কঠাল", obj_kettle: "কেটলি", obj_lamp: "চাকি",
+    obj_plate: "থালী", obj_pot: "পাত্ৰ", obj_rice: "ভাত",
+    obj_slippers: "চেণ্ডেল", obj_soap: "চাবোন", obj_spoon: "চামুচ",
+    obj_teacup: "চাহৰ কাপ", obj_umbrella: "ছাতি",
+
+    shape_circle: "বৃত্ত", shape_square: "বৰ্গ", shape_triangle: "ত্ৰিভুজ",
+    shape_diamond: "হীৰক", shape_hexagon: "ষড়ভুজ", shape_star: "তৰা",
+
+    next_games_at: (time) => `পিছৰ খেল ${time} বজাত`,
+    come_back_later: "আপুনি আজি খেলিছে। পিছত আহক।",
 
     // TTS phrases
     speak_greeting: (greeting) =>
