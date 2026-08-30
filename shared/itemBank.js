@@ -18,6 +18,12 @@
 //
 // Asset keys come from tools/item_manifest.json, which must be CLEAN before
 // anything here references them. Nothing in this file hardcodes a path.
+//
+// EVERY ITEM MUST BE STRUCTURED-CLONEABLE. A session's items are frozen into
+// IndexedDB at the start, and IndexedDB cannot store functions -- a helper
+// like `optionUrls: (opts) => ...` on an item throws DataCloneError and takes
+// the whole session with it. Items are DATA; url building belongs to the
+// renderer. test_item_bank.mjs asserts this with structuredClone.
 
 import { DOMAINS } from "./domains.js";
 import { MAX_LEVEL, MIN_LEVEL, difficultyFor } from "./levels.js";
@@ -117,7 +123,6 @@ function buildMemory(item, level) {
       options: seededShuffle([correct, ...distractors], 7000 + level),
       correct,
     },
-    optionUrls: (opts) => opts.map(objectUrl),
     cueLevel: d.cueLevel,
   };
 }

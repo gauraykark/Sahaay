@@ -4,6 +4,7 @@ import { AuthProvider, RequireRole } from "./lib/auth";
 
 import ItemPreview from "./pages/ItemPreview";
 import PlayDomain from "./pages/PlayDomain";
+import PlaySession from "./pages/PlaySession";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import PatientHome from "./pages/PatientHome";
@@ -32,7 +33,7 @@ function App() {
 
           {/* One route for all six domains. The four /patient/game/* routes
               are gone with the games that owned them. */}
-          <Route path="/patient/play" element={<PlayDomain />} />
+          <Route path="/patient/play" element={<PlaySession />} />
           <Route path="/patient/play/:domain" element={<PlayDomain />} />
 
           {/* CAREGIVER — the PIN gate lives inside the component and stays as

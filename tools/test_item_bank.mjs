@@ -124,6 +124,31 @@ eq("seededShuffle is stable",
    seededShuffle([1, 2, 3, 4, 5], 7).join(),
    seededShuffle([1, 2, 3, 4, 5], 7).join());
 
+// ── Items must survive IndexedDB ─────────────────────────────────────────────
+//
+// A session freezes its items into IndexedDB. Anything not structured-cloneable
+// -- a function, a Symbol, a class instance -- throws DataCloneError at
+// session start and takes the whole sitting down. JSON.stringify does NOT
+// catch this: it drops functions silently, which is how one got shipped.
+
+{
+  let bad = null;
+  for (const level of [0, 7, 15]) {
+    for (const { item } of selectSessionItems({ level })) {
+      try {
+        structuredClone(item);
+      } catch (e) {
+        bad = `${item.domain}@${level}: ${e.message}`;
+      }
+      for (const [key, value] of Object.entries(item)) {
+        if (typeof value === "function") bad = `${item.domain}@${level}: ${key} is a function`;
+      }
+    }
+    if (bad) break;
+  }
+  ok("every item survives structuredClone (IndexedDB can store it)", bad === null, bad ?? "");
+}
+
 // ── Social: options are emotion WORDS, never faces ───────────────────────────
 //
 // The single-face format is what keeps actor identity out of the task. If the

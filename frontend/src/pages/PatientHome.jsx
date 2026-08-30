@@ -133,7 +133,7 @@ export default function PatientHome() {
         <div className="space-y-4">
           <Link
             to="/patient/play"
-            className="block w-full text-center bg-primary text-white rounded-3xl py-12 text-4xl font-medium"
+            className="block w-full text-center bg-primary-600 text-white rounded-3xl py-12 text-4xl font-medium"
           >
             {t("play")}
           </Link>

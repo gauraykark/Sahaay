@@ -146,6 +146,34 @@ db.version(4)
     await tx.table("settings").delete("memoryDifficultyV2");
   });
 
+// v5: frozen play sessions.
+//
+// A session's contents are decided once, at the start, and stored. They are
+// never rebuilt -- that is what makes "getting item 3 wrong does not change
+// item 4" true rather than merely intended, and it is what lets a patient who
+// closed the app mid-session come back to the SAME questions instead of a
+// reshuffled set.
+//
+// `playMs` accumulates actual play time, which is what the 20-minute daily cap
+// counts. Wall-clock time since the app was opened would punish a patient who
+// put the phone down to answer the door.
+db.version(5).stores({
+  patients: "++id, name, isDemo, serverId, createdAt",
+  gameSessions:
+    "++id, patientId, gameType, domain, score, moves, completed, status, sessionId, createdAt, synced",
+  difficultyState: "[patientId+gameType], patientId, gameType, level",
+  settings: "key",
+  vaultPeople: "++id, patientId, name, relationship, createdAt",
+  vaultRoutineSteps: "++id, patientId, order, time, activity, createdAt",
+  domainLevels: "[patientId+domain], patientId, domain, level, updatedAt",
+  itemHistory: "++id, [patientId+domain], patientId, domain, itemId, playedAt",
+
+  // One row per sitting. `sessionId` is the client-generated id that every
+  // round of that sitting carries, so the two can be joined later.
+  playSessions:
+    "sessionId, patientId, [patientId+dayKey], dayKey, startedAt, endedAt, status",
+});
+
 // ---------------------------------------------------------------------
 // Active patient helpers
 // ---------------------------------------------------------------------
@@ -772,4 +800,104 @@ export async function pruneItemHistory(days = ITEM_ROTATION_DAYS * 3) {
   const stale = await db.itemHistory.filter((r) => r.playedAt < cutoff).toArray();
   if (stale.length) await db.itemHistory.bulkDelete(stale.map((r) => r.id));
   return stale.length;
+}
+// ---------------------------------------------------------------------
+// Play sessions — the frozen sitting
+// ---------------------------------------------------------------------
+
+/**
+ * Every session for the active patient, newest first.
+ *
+ * The gate needs a few days of history, not all of it: the four-hour rule
+ * looks at the most recent end time, and the per-day rules look at today.
+ */
+export async function listPlaySessions(days = 3) {
+  const patientId = await getActivePatientId();
+  const cutoff = Date.now() - days * 86400000;
+  const rows = await db.playSessions.where("patientId").equals(patientId).toArray();
+  return rows
+    .filter((r) => (r.startedAt ?? 0) >= cutoff || r.status === "in_progress")
+    .sort((a, b) => b.startedAt - a.startedAt);
+}
+
+export async function getPlaySession(sessionId) {
+  return db.playSessions.get(sessionId);
+}
+
+/**
+ * Store a freshly built session. Called once; the items never change after.
+ *
+ * Preview mode still freezes and still stores: a caregiver walking through the
+ * app must see the same resume behaviour a patient would. What preview blocks
+ * is CLINICAL writes -- game rounds and level changes -- not the scaffolding
+ * that makes the app navigable.
+ */
+export async function startPlaySession({ sessionId, dayKey, items, levels }) {
+  const patientId = await getActivePatientId();
+
+  // IDEMPOTENT, AND ATOMIC. If a session is already open for this patient,
+  // return it instead of creating a second one.
+  //
+  // The transaction is the point. A plain check-then-create loses the race:
+  // React StrictMode double-invokes effects in development, both calls read
+  // "no open session" before either writes, and two sessions land one
+  // millisecond apart. That is not a development-only problem -- two open
+  // sessions both count against the two-a-day limit, the gate resumes
+  // whichever it finds first, and the other silently eats a slot.
+  //
+  // Dexie serialises operations on a table inside an rw transaction, so the
+  // read and the write cannot interleave.
+  return db.transaction("rw", db.playSessions, async () => {
+    const existing = await db.playSessions
+      .where("patientId")
+      .equals(patientId)
+      .filter((r) => r.status === "in_progress")
+      .first();
+    if (existing) return existing;
+
+    const row = {
+      sessionId,
+      patientId,
+      dayKey,
+      // Item ids alongside the items themselves, so a query can find a
+      // session by item without deserialising every row.
+      itemIds: items.map((i) => i.id),
+      items,
+      levels,
+      index: 0,
+      playMs: 0,
+      startedAt: Date.now(),
+      endedAt: null,
+      status: "in_progress",
+    };
+    await db.playSessions.put(row);
+    return row;
+  });
+}
+
+/** Advance the frozen session. Never touches `items`. */
+export async function advancePlaySession(sessionId, { index, addPlayMs = 0 }) {
+  const row = await db.playSessions.get(sessionId);
+  if (!row) return null;
+  const next = {
+    ...row,
+    index: index ?? row.index,
+    playMs: (row.playMs ?? 0) + addPlayMs,
+  };
+  await db.playSessions.put(next);
+  return next;
+}
+
+/** Close a session. `status` is "completed" or "abandoned". */
+export async function endPlaySession(sessionId, status, addPlayMs = 0) {
+  const row = await db.playSessions.get(sessionId);
+  if (!row) return null;
+  const next = {
+    ...row,
+    playMs: (row.playMs ?? 0) + addPlayMs,
+    endedAt: Date.now(),
+    status,
+  };
+  await db.playSessions.put(next);
+  return next;
 }

@@ -45,7 +45,7 @@ function WordButton({ label, onClick, lift }) {
       onClick={onClick}
       className={`px-8 py-6 rounded-2xl border-2 text-2xl font-medium transition-transform ${
         lift
-          ? "border-primary bg-teal-50 text-neutral-900 scale-105"
+          ? "border-primary-500 bg-teal-50 text-neutral-900 scale-105"
           : "border-neutral-300 bg-white text-neutral-800"
       }`}
     >
@@ -60,7 +60,7 @@ function PictureButton({ src, label, onClick, lift }) {
       type="button"
       onClick={onClick}
       className={`p-2 rounded-2xl border-2 transition-transform ${
-        lift ? "border-primary bg-teal-50 scale-105" : "border-neutral-300 bg-white"
+        lift ? "border-primary-500 bg-teal-50 scale-105" : "border-neutral-300 bg-white"
       }`}
     >
       <img
@@ -283,7 +283,7 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
             onClick={() => tap(step)}
             className={`px-8 py-6 rounded-2xl border-2 text-2xl text-left transition-transform ${
               (hint || correcting) && step === nextStep
-                ? "border-primary bg-teal-50 scale-105"
+                ? "border-primary-500 bg-teal-50 scale-105"
                 : "border-neutral-300 bg-white"
             }`}
           >
@@ -340,7 +340,7 @@ function MatchTheShape({ item, t, correcting, onAnswer }) {
             onClick={() => answer(name === item.correct)}
             className={`p-4 rounded-2xl border-2 transition-transform ${
               correcting && name === item.correct
-                ? "border-primary bg-teal-50 scale-105"
+                ? "border-primary-500 bg-teal-50 scale-105"
                 : "border-neutral-300 bg-white"
             }`}
           >
