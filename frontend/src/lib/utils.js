@@ -3,6 +3,8 @@
 // Small, pure, shared helpers used across pages and games. Kept dependency-free
 // and framework-agnostic so they're easy to test and reuse.
 
+import { MAX_LEVEL, MIN_LEVEL } from "@shared/levels";
+
 /** Time-of-day greeting used on Patient Home and in the voice greeting. */
 export function getGreeting(date = new Date()) {
   const hour = date.getHours();
@@ -63,6 +65,11 @@ export function describeSession(session) {
 
 /**
  * Rule-based adaptive difficulty (REQ-003 / F-013): fully offline, no AI.
+ *
+ * The minLevel/maxLevel defaults used to be a third private copy of the level
+ * range (2-4 here, 1-5 below, neither matching GAME_LEVEL_META or the server).
+ * They defer to shared/levels.js now. Callers that want a narrower window
+ * still pass one explicitly.
  * Given how many moves a game took relative to the "ideal" number of moves,
  * decide whether to raise, lower, or hold the difficulty level.
  *
@@ -73,8 +80,8 @@ export function nextDifficultyLevel({
   currentLevel,
   moves,
   idealMoves,
-  minLevel = 2,
-  maxLevel = 4,
+  minLevel = MIN_LEVEL,
+  maxLevel = MAX_LEVEL,
   raiseThreshold = 1.6,
   lowerThreshold = 2.8,
 }) {
@@ -97,8 +104,8 @@ export function nextLevelByAccuracy({
   currentLevel,
   correct,
   total,
-  minLevel = 1,
-  maxLevel = 5,
+  minLevel = MIN_LEVEL,
+  maxLevel = MAX_LEVEL,
   raiseThreshold = 0.8,
   lowerThreshold = 0.5,
 }) {

@@ -1,10 +1,28 @@
+import { fileURLToPath } from 'node:url'
+
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// The level scale is defined once, at the repo root, and imported by both the
+// client and the FastAPI service (shared/levels.js + backend/app/levels.py).
+// That directory sits outside the Vite root, so it needs both an alias and an
+// explicit fs.allow entry to be served in dev.
+const sharedDir = fileURLToPath(new URL('../shared', import.meta.url))
+
 // https://vite.dev/config/
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@shared': sharedDir,
+    },
+  },
+  server: {
+    fs: {
+      allow: ['..'],
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),

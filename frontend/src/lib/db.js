@@ -8,6 +8,8 @@
 
 import Dexie from "dexie";
 
+import { levelOrNull } from "@shared/levels";
+
 export const db = new Dexie("sahaay");
 
 // v1 schema.
@@ -324,36 +326,28 @@ export async function markSessionsSynced(ids) {
 // Difficulty state (rule-based, offline, per REQ-003 / F-013)
 // ---------------------------------------------------------------------
 
-const MEMORY_LEVEL_V2_KEY = "memoryDifficultyV2";
+// DELETED: migrateLegacyMemoryLevels() and its "memoryDifficultyV2" settings
+// flag. It remapped memory levels {2:1, 3:2, 4:3} on the first read for any
+// device whose flag was unset. On the 0-15 scale that is not a migration, it
+// is silent corruption: a real level 2 would be rewritten to 1 and a real
+// level 3 to 2, with no record that it happened and no way back. Levels are
+// now defined once in shared/levels.js and never remapped on read.
+//
+// Devices that already ran it keep an inert { key: "memoryDifficultyV2" } row
+// in `settings` with no reader left. The v4 upgrade sweeps it.
 
 /**
- * One-time map of the old Memory Matching pair-count (2–4) onto the new
- * 1–4 grid levels (2×2 … 5×5). Safe to call on every read.
+ * Returns the saved difficulty level for a game.
+ *
+ * `defaultLevel` is returned only when this patient has no stored level for
+ * this game at all. A stored level of 0 is a real level and comes back as 0 --
+ * see shared/levels.js. Never re-introduce `row?.level || defaultLevel` here.
  */
-async function migrateLegacyMemoryLevels() {
-  const flag = await db.settings.get(MEMORY_LEVEL_V2_KEY);
-  if (flag?.value) return;
-
-  const rows = await db.difficultyState.where("gameType").equals("memory").toArray();
-  await db.transaction("rw", db.difficultyState, db.settings, async () => {
-    for (const row of rows) {
-      const mapped = { 2: 1, 3: 2, 4: 3 }[row.level];
-      if (mapped) {
-        await db.difficultyState.put({ ...row, level: mapped });
-      }
-    }
-    await db.settings.put({ key: MEMORY_LEVEL_V2_KEY, value: 1 });
-  });
-}
-
-/** Returns the saved difficulty level for a game, or defaultLevel if none is set yet. */
 export async function getDifficulty(gameType, defaultLevel) {
-  if (gameType === "memory") {
-    await migrateLegacyMemoryLevels();
-  }
   const patientId = await getActivePatientId();
   const row = await db.difficultyState.get([patientId, gameType]);
-  return row ? row.level : defaultLevel;
+  const stored = levelOrNull(row?.level);
+  return stored === null ? defaultLevel : stored;
 }
 
 /**

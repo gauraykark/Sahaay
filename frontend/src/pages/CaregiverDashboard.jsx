@@ -21,11 +21,11 @@ import {
   deleteVaultRoutineStep,
   setPreviewMode,
 } from "../lib/db";
+import { MAX_LEVEL, levelOrNull } from "@shared/levels";
 import { formatRelativeDay, describeSession } from "../lib/utils";
 import { SourceBadge } from "../components/ui/Badge";
 import { getMe, hydratePatientsFromServer } from "../lib/api";
 import {
-  GAME_LEVEL_META,
   NAME_CIRCLE_OPTIONS,
   memoryGridLabel,
   objectsQuestionCount,
@@ -457,7 +457,10 @@ function CaregiverTool({ icon, title, detail, to, onClick }) {
 }
 
 function levelDetail(gameType, level) {
-  if (!level) return "Level 1 (not played yet)";
+  // `if (!level)` used to be here, which read a real level 0 as "not played
+  // yet". Level 0 is the bottom of the scale, not the absence of one --
+  // see shared/levels.js. Only null/undefined means unplayed.
+  if (level === null || level === undefined) return "Not played yet";
   if (gameType === "memory") {
     return `Level ${level} · ${memoryGridLabel(level)} cards`;
   }
@@ -525,8 +528,10 @@ function buildAlerts(recentSessions, perGameLatest) {
 }
 
 function memoryRead(recentSessions, difficultyRows) {
-  const memoryLevel =
-    difficultyRows.find((row) => row.gameType === "memory")?.level || 1;
+  // `|| 1` here silently promoted every level-0 patient to level 1.
+  const memoryLevel = levelOrNull(
+    difficultyRows.find((row) => row.gameType === "memory")?.level
+  );
   const scored = recentSessions.filter(
     (s) => typeof s.score === "number" && s.total > 0
   );
@@ -561,7 +566,9 @@ function PatientDetailDashboard({
   const levelByGame = Object.fromEntries(
     GAME_ORDER.map((gameType) => [
       gameType,
-      difficultyRows.find((row) => row.gameType === gameType)?.level || 1,
+      levelOrNull(
+        difficultyRows.find((row) => row.gameType === gameType)?.level
+      ),
     ])
   );
 
@@ -642,7 +649,9 @@ function PatientDetailDashboard({
                 Average correctness across recent scored rounds
               </p>
               <p className="text-sm text-neutral-600 mt-3">
-                Memory Matching is on {levelDetail("memory", memoryLevel)}
+                {memoryLevel === null
+                  ? "Memory Matching has not been played yet"
+                  : `Memory Matching is on ${levelDetail("memory", memoryLevel)}`}
               </p>
             </section>
 
@@ -698,7 +707,6 @@ function PatientDetailDashboard({
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {GAME_ORDER.map((gameType) => {
-                  const meta = GAME_LEVEL_META[gameType];
                   const level = levelByGame[gameType];
                   const row = difficultyRows.find(
                     (row) => row.gameType === gameType
@@ -716,7 +724,7 @@ function PatientDetailDashboard({
                         {row?.source && <SourceBadge source={row.source} />}
                       </div>
                       <p className="text-sm text-neutral-600 mt-1">
-                        {level} / {meta.max}
+                        {level === null ? "Not played yet" : `${level} / ${MAX_LEVEL}`}
                       </p>
                       {reason && (
                         <p className="text-sm text-neutral-500 mt-2">{reason}</p>

@@ -271,7 +271,16 @@ function distractorsFromPool(correct, pool, n = 3) {
  * Caregiver-added vault people for that circle are included first.
  */
 export function dealNameRecallQuestions(level, vaultPeople = []) {
-  const circle = NAME_RECALL_CIRCLES.find((c) => c.level === level) || NAME_RECALL_CIRCLES[0];
+  // An exact `find` on level fell back to the FIRST circle for anything it did
+  // not recognise, so on the 0-15 scale a patient at level 9 would be handed
+  // the easiest circle. Levels are one scale now (shared/levels.js) and these
+  // banks are still 1-based, so clamp into the content that exists. The banks
+  // themselves are replaced by the item bank in Sprint 3.
+  const index = Math.max(
+    0,
+    Math.min(NAME_RECALL_CIRCLES.length - 1, Math.round(level) - 1)
+  );
+  const circle = NAME_RECALL_CIRCLES[index];
   const custom = vaultPeople
     .filter((p) => Number(p.circle || 1) === circle.level && p.name?.trim())
     .map((p) => ({

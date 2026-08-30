@@ -18,21 +18,21 @@
 //
 // See g_prop_02_architecture.md D3-D5, D9, D10.
 
+import { clampLevel } from "@shared/levels";
+
 import { getAIPlan, isPreviewMode, markPlanUsed, setDifficulty } from "./db";
 import { GAME_LEVEL_META } from "./gameContent";
 import { nextDifficultyLevel, nextLevelByAccuracy } from "./utils";
 
-export function clampLevel(level, min, max) {
-  return Math.max(min, Math.min(max, level));
-}
-
-/** Bound a level to the game's range and to one step from where it is now. */
-function bound(level, currentLevel, meta) {
-  let next = clampLevel(level, meta.min, meta.max);
-  if (next > currentLevel + 1) next = currentLevel + 1;
-  if (next < currentLevel - 1) next = currentLevel - 1;
-  return next;
-}
+// The local bound() is gone. It clamped to a per-game range AND to one step
+// from the current level, and agents.py:clamp() did the same thing separately
+// on the server -- two copies of one rule, already drifted (routine 4 vs 3,
+// name-recall 5 vs 3), which is how whole levels of content became
+// unreachable through the AI path.
+//
+// Bounds now come from shared/levels.js, imported by both sides. Step limiting
+// is not a bound: it is a clinical rule (max +/-1 per domain per week) and it
+// belongs to the weekly evaluator, in one place, not to every caller.
 
 // ── How the round went ────────────────────────────────────────────────────────
 
@@ -124,7 +124,6 @@ function ruleReason(nextLevel, currentLevel) {
  *          whether guidance came from the AI or the offline fallback.
  */
 export async function resolveNextLevel({ gameType, currentLevel, stats }) {
-  const meta = GAME_LEVEL_META[gameType];
   const preview = isPreviewMode();
   const plan = await getAIPlan(gameType);
 
@@ -147,7 +146,7 @@ export async function resolveNextLevel({ gameType, currentLevel, stats }) {
       outcomeOf(stats)
     ];
 
-    newLevel = bound(branch.level, currentLevel, meta);
+    newLevel = clampLevel(branch.level);
     reason = branch.reason;
     source = plan.source === "ai" ? "ai" : "rule";
     // A preview round must not age the patient's plan toward staleness.
@@ -155,11 +154,7 @@ export async function resolveNextLevel({ gameType, currentLevel, stats }) {
   } else {
     // No plan, or it expired. The rule engine has always worked offline and
     // still does — this is the floor, not an error path.
-    newLevel = bound(
-      ruleBasedNext({ gameType, currentLevel, stats }),
-      currentLevel,
-      meta
-    );
+    newLevel = clampLevel(ruleBasedNext({ gameType, currentLevel, stats }));
     reason = ruleReason(newLevel, currentLevel);
     source = "rule";
   }

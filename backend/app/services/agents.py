@@ -9,16 +9,24 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..domains import GAME_LABELS, GAME_TYPES, domain_for_game
+from ..levels import MIN_LEVEL, clamp_level, first_level
 from ..models import GameSession, Patient
 from . import analytics
 
-# Level bounds per game, matching the frontend's GAME_LEVEL_META.
-LEVEL_BOUNDS = {
-    "memory": (1, 4),
-    "routine": (1, 3),
-    "objects": (1, 5),
-    "name-recall": (1, 3),
-}
+# LEVEL_BOUNDS is gone. It held a per-game range (memory 1-4, routine 1-3,
+# objects 1-5, name-recall 1-3) that had already drifted out of step with the
+# client's GAME_LEVEL_META (routine 1-4, name-recall 1-5). The narrower server
+# range won, so the coach could never propose routine level 4 or name-recall
+# 4-5 and that content was unreachable through the AI path entirely.
+#
+# There is one scale now, 0-15, defined in app/levels.py and mirrored in
+# shared/levels.js. See MIN_LEVEL / MAX_LEVEL there.
+
+# A patient with no sessions at all has no level yet -- not level 1. Until
+# calibration lands (see the build order), the coach needs *some* integer to
+# reason from, so it starts at the bottom of the scale rather than inventing a
+# level nobody measured.
+UNPLAYED_START_LEVEL = MIN_LEVEL
 
 
 def _now() -> datetime:
@@ -40,20 +48,6 @@ def is_available() -> bool:
     except ImportError:
         return False
     return True
-
-
-def clamp(level: int, game_type: str, current: int) -> int:
-    """Bound a proposed level to the game's range and +/-1 of current.
-
-    Applies to rule output and AI output alike. See g_prop_02_architecture D9.
-    """
-    low, high = LEVEL_BOUNDS.get(game_type, (1, 5))
-    level = max(low, min(high, level))
-    if level > current + 1:
-        level = current + 1
-    if level < current - 1:
-        level = current - 1
-    return level
 
 
 # ── Cognitive Coach ───────────────────────────────────────────────────────────
@@ -132,7 +126,16 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             .limit(lookback)
             .all()
         )
-        current = (sessions[0].new_level or sessions[0].level or 1) if sessions else 1
+        # `new_level or level or 1` used to live here. On a 0-15 scale that
+        # reads every genuine level-0 patient as level 1 -- the exact failure
+        # this rewrite exists to prevent. first_level() checks `is None`.
+        current = (
+            first_level(sessions[0].new_level, sessions[0].level)
+            if sessions
+            else None
+        )
+        if current is None:
+            current = UNPLAYED_START_LEVEL
         session_data[game_type] = {"current": current, "sessions": sessions}
 
         if sessions:
@@ -181,9 +184,9 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             continue
         current = session_data[gt]["current"]
 
-        good_lvl = clamp(game_out.level_if_good, gt, current)
-        ok_lvl   = clamp(game_out.level_if_ok,   gt, current)
-        poor_lvl = clamp(game_out.level_if_poor,  gt, current)
+        good_lvl = clamp_level(game_out.level_if_good)
+        ok_lvl   = clamp_level(game_out.level_if_ok)
+        poor_lvl = clamp_level(game_out.level_if_poor)
 
         # No DifficultyHistory written here. These three levels are branches
         # for a round that has not been played yet — recording them would put
@@ -203,14 +206,16 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
     covered = {p["game_type"] for p in plans}
     for game_type in GAME_TYPES:
         if game_type not in covered:
-            current = session_data.get(game_type, {}).get("current", 1)
+            current = session_data.get(game_type, {}).get(
+                "current", UNPLAYED_START_LEVEL
+            )
             label = GAME_LABELS[game_type]
             plans.append({
                 "game_type": game_type,
                 "current_level": current,
-                "if_good":  {"level": clamp(current + 1, game_type, current), "reason": f"Doing beautifully — let's try a little more next time."},
-                "if_ok":    {"level": clamp(current,     game_type, current), "reason": f"Steady and consistent — same level next time."},
-                "if_poor":  {"level": clamp(current - 1, game_type, current), "reason": f"We'll take it a little easier next time."},
+                "if_good":  {"level": clamp_level(current + 1), "reason": f"Doing beautifully — let's try a little more next time."},
+                "if_ok":    {"level": clamp_level(current), "reason": f"Steady and consistent — same level next time."},
+                "if_poor":  {"level": clamp_level(current - 1), "reason": f"We'll take it a little easier next time."},
             })
 
     next_game = result.next_game if result.next_game in GAME_TYPES else _suggest_next_game(db, patient)
@@ -237,7 +242,16 @@ def _rule_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             .limit(lookback)
             .all()
         )
-        current = (sessions[0].new_level or sessions[0].level or 1) if sessions else 1
+        # `new_level or level or 1` used to live here. On a 0-15 scale that
+        # reads every genuine level-0 patient as level 1 -- the exact failure
+        # this rewrite exists to prevent. first_level() checks `is None`.
+        current = (
+            first_level(sessions[0].new_level, sessions[0].level)
+            if sessions
+            else None
+        )
+        if current is None:
+            current = UNPLAYED_START_LEVEL
         label = GAME_LABELS[game_type]
 
         plans.append(
@@ -245,15 +259,15 @@ def _rule_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
                 "game_type": game_type,
                 "current_level": current,
                 "if_good": {
-                    "level": clamp(current + 1, game_type, current),
+                    "level": clamp_level(current + 1),
                     "reason": f"Doing well — {label} will step up a little.",
                 },
                 "if_ok": {
-                    "level": clamp(current, game_type, current),
+                    "level": clamp_level(current),
                     "reason": f"{label} stays at the same level next time.",
                 },
                 "if_poor": {
-                    "level": clamp(current - 1, game_type, current),
+                    "level": clamp_level(current - 1),
                     "reason": f"{label} will be a little gentler next time.",
                 },
             }
