@@ -1,43 +1,94 @@
+"""The six DSM-5 neurocognitive domains.
 
-# ── Domains (displayed) ───────────────────────────────────────────────────────
+This replaces four invented domains (memory, attention, routine, recognition).
+Three things were wrong with those:
 
-DOMAIN_MEMORY = "memory"
-DOMAIN_ATTENTION = "attention"
-DOMAIN_ROUTINE = "routine"
-DOMAIN_RECOGNITION = "recognition"
+* they are not a recognised framework, so nothing a clinician reads maps onto
+  them;
+* ``memory`` and ``name-recall`` both wrote into ``memory``, blending two
+  different tasks into one number; and
+* ``attention`` had no game at all -- it was synthesised from completion rate
+  and pace variance, and completion rate is a constant 1.0 because no game can
+  log an abandoned round.
 
-DOMAINS = [DOMAIN_MEMORY, DOMAIN_ATTENTION, DOMAIN_ROUTINE, DOMAIN_RECOGNITION]
+All dementia types affect these same six. They differ in which one goes first
+and how fast, which is why domain is the right axis to track and subtype is
+not. The six move INDEPENDENTLY, and that independence is the entire clinical
+signal: memory sliding while executive holds flat looks different from a global
+decline, and that difference is what a caregiver needs to see between visits.
 
+The patient never sees these names.
+"""
+
+# ── Domains (six, DSM-5) ──────────────────────────────────────────────────────
+
+DOMAIN_ATTENTION = "attention"                  # complex attention
+DOMAIN_EXECUTIVE = "executive"                  # executive function
+DOMAIN_MEMORY = "memory"                        # learning and memory
+DOMAIN_LANGUAGE = "language"                    # language
+DOMAIN_PERCEPTUAL_MOTOR = "perceptual_motor"    # perceptual-motor
+DOMAIN_SOCIAL = "social"                        # social cognition
+
+DOMAINS = [
+    DOMAIN_ATTENTION,
+    DOMAIN_EXECUTIVE,
+    DOMAIN_MEMORY,
+    DOMAIN_LANGUAGE,
+    DOMAIN_PERCEPTUAL_MOTOR,
+    DOMAIN_SOCIAL,
+]
+
+# Clinician-facing English. The patient-facing strings are in the client's
+# i18n dictionaries (en / hi / as) -- these are for the doctor and caregiver
+# dashboards and for the report agent's prose.
 DOMAIN_LABELS = {
-    DOMAIN_MEMORY: "Memory",
     DOMAIN_ATTENTION: "Attention",
-    DOMAIN_ROUTINE: "Daily Routine",
-    DOMAIN_RECOGNITION: "Object Recognition",
+    DOMAIN_EXECUTIVE: "Executive Function",
+    DOMAIN_MEMORY: "Memory",
+    DOMAIN_LANGUAGE: "Language",
+    DOMAIN_PERCEPTUAL_MOTOR: "Perceptual-Motor",
+    DOMAIN_SOCIAL: "Social Cognition",
 }
 
-
-# ── Abilities (structural, six) ───────────────────────────────────────────────
-
-ABILITIES = ["recall", "naming", "order", "attention", "numbers", "shapes"]
-
-# Only these four have games behind them today.
-ABILITIES_BUILT = ["recall", "naming", "order", "attention"]
-
-ABILITY_LABELS = {
-    "recall": "Recall",
-    "naming": "Naming",
-    "order": "Order",
-    "attention": "Attention",
-    "numbers": "Numbers",
-    "shapes": "Shapes",
-}
+# Nothing is derived any more. Attention gets a real go/no-go game in Sprint 4;
+# until then it reports "no data" rather than a synthesised number, because a
+# number nobody measured is worse than an honest gap on a clinical trend line.
+DERIVED_DOMAINS: list[str] = []
 
 
 # ── Game mapping ──────────────────────────────────────────────────────────────
+#
+# Two generations of games live here at once. The six below are built in
+# Sprint 4, one per domain. The four legacy games stay playable until then, so
+# the app keeps working through the rewrite -- they are mapped to whichever of
+# the six they genuinely exercise, not to a placeholder.
 
+# The six built in Sprint 4, one per domain.
+TARGET_GAME_TYPES = [
+    "attention",         # go/no-go: tap green, not red
+    "sequencing",        # put a daily routine in order
+    "recall",            # see pictures, recall after a gap
+    "naming",            # "what is this called?"
+    "shapes",            # match shape / set clock hands
+    "faces",             # which face is happy?
+]
+
+# GAME_TYPES means "what the client can actually run", and it is still the
+# legacy four. Everything that iterates games -- the coach, the seeder -- wants
+# this one, because querying for a game nobody can play returns nothing and a
+# coach with no data is a coach that says nothing.
+#
+# SPRINT 4: delete this list and set GAME_TYPES = TARGET_GAME_TYPES.
 GAME_TYPES = ["memory", "routine", "objects", "name-recall"]
 
 GAME_LABELS = {
+    "attention": "Attention",
+    "sequencing": "Putting Things In Order",
+    "recall": "Remembering Pictures",
+    "naming": "Naming Things",
+    "shapes": "Shapes and Space",
+    "faces": "Faces and Feelings",
+    # legacy
     "memory": "Memory Matching",
     "routine": "Daily Routine",
     "objects": "Object Recognition",
@@ -46,30 +97,38 @@ GAME_LABELS = {
 
 # A game writes into exactly one domain.
 GAME_TO_DOMAIN = {
+    "attention": DOMAIN_ATTENTION,
+    "sequencing": DOMAIN_EXECUTIVE,
+    "recall": DOMAIN_MEMORY,
+    "naming": DOMAIN_LANGUAGE,
+    "shapes": DOMAIN_PERCEPTUAL_MOTOR,
+    "faces": DOMAIN_SOCIAL,
+
+    # Legacy games, un-collapsed. "memory" and "name-recall" both used to write
+    # into memory, which is why the Memory score blended two unrelated tasks.
+    # They now separate: the matching board is learning and memory; naming a
+    # person from their relationship is person-knowledge, which is social
+    # cognition (and is what My People's Test scores into from Sprint 9).
     "memory": DOMAIN_MEMORY,
-    "name-recall": DOMAIN_MEMORY,
-    "objects": DOMAIN_RECOGNITION,
-    "routine": DOMAIN_ROUTINE,
-}
-
-GAME_TO_ABILITY = {
-    "memory": "recall",
-    "name-recall": "recall",
-    "objects": "naming",
-    "routine": "order",
+    "routine": DOMAIN_EXECUTIVE,
+    "objects": DOMAIN_LANGUAGE,
+    "name-recall": DOMAIN_SOCIAL,
 }
 
 
-def domain_for_game(game_type: str) -> str:
-    """Domain a session belongs to. Resolved at write time, not read time."""
-    return GAME_TO_DOMAIN.get(game_type, DOMAIN_MEMORY)
+# Domains a patient can actually reach with the games that exist on the client
+# today. Attention and perceptual-motor have no game until Sprint 4, so telling
+# a caregiver to "try the untouched activity types" for those would point at
+# something that is not there. Once Sprint 4 lands and the legacy four are
+# retired, this equals DOMAINS.
+PLAYABLE_DOMAINS = [d for d in DOMAINS if d in {GAME_TO_DOMAIN[g] for g in GAME_TYPES}]
 
 
-def ability_for_game(game_type: str) -> str:
-    return GAME_TO_ABILITY.get(game_type, "recall")
+def domain_for_game(game_type: str) -> str | None:
+    """Domain a session belongs to, or None for a game we do not recognise.
 
-
-# Attention is not owned by any single game — it is derived from behavioural
-# signals (response-time consistency, completion rate) across all of them.
-# See analytics.attention_score().
-DERIVED_DOMAINS = [DOMAIN_ATTENTION]
+    Returns None rather than defaulting to memory. A silent default is how
+    every unmapped game type ended up inflating the Memory score; an unknown
+    game is a bug, and the caller should be able to see it.
+    """
+    return GAME_TO_DOMAIN.get(game_type)

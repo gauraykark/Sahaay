@@ -33,6 +33,18 @@ const strings = {
     name_recall: "Name Recall",
     name_recall_desc: "Remember names of familiar people and places",
 
+    // The six DSM-5 domains. The PATIENT never sees these — they are for the
+    // caregiver's own screens, which follow the patient's language so a
+    // family member reading the app in Assamese is not dropped into English
+    // the moment they look at how things are going. Doctor-facing prose stays
+    // English and comes from DOMAIN_LABELS on the server.
+    domain_attention: "Attention",
+    domain_executive: "Planning and Order",
+    domain_memory: "Memory",
+    domain_language: "Words and Naming",
+    domain_perceptual_motor: "Shapes and Space",
+    domain_social: "People and Feelings",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}. Welcome back. Choose an activity when you are ready.`,
@@ -62,6 +74,14 @@ const strings = {
     name_recall: "नाम याद करना",
     name_recall_desc: "परिचित लोगों और स्थानों के नाम याद रखें",
 
+    // छह क्षेत्र — रोगी इन्हें कभी नहीं देखता, ये देखभालकर्ता की स्क्रीन के लिए हैं।
+    domain_attention: "ध्यान",
+    domain_executive: "योजना और क्रम",
+    domain_memory: "स्मृति",
+    domain_language: "शब्द और नाम",
+    domain_perceptual_motor: "आकार और स्थान",
+    domain_social: "लोग और भावनाएँ",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। वापसी पर स्वागत है। तैयार होने पर एक गतिविधि चुनें।`,
@@ -90,6 +110,14 @@ const strings = {
     objects_desc: "আপোনাৰ চাৰিওফালৰ সাধাৰণ বস্তু চিনাক্ত কৰক",
     name_recall: "নাম স্মৰণ",
     name_recall_desc: "পৰিচিত মানুহ আৰু ঠাইৰ নাম মনত ৰাখক",
+
+    // The six domains, for the caregiver's screens. The patient never sees them.
+    domain_attention: "মনোযোগ",
+    domain_executive: "পৰিকল্পনা আৰু ক্ৰম",
+    domain_memory: "স্মৃতি",
+    domain_language: "শব্দ আৰু নাম",
+    domain_perceptual_motor: "আকৃতি আৰু স্থান",
+    domain_social: "মানুহ আৰু অনুভৱ",
 
     // TTS phrases
     speak_greeting: (greeting) =>

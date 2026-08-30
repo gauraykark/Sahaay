@@ -7,18 +7,17 @@ from statistics import mean, pstdev
 from sqlalchemy.orm import Session
 
 from ..domains import (
-    DERIVED_DOMAINS,
-    DOMAIN_ATTENTION,
     DOMAIN_LABELS,
     DOMAINS,
     GAME_LABELS,
+    PLAYABLE_DOMAINS,
 )
 from ..levels import MIN_LEVEL, first_level
 from ..models import DifficultyHistory, GameSession, Patient, ReminderLog
 
-# Attention has no game of its own yet -- it is synthesised (see
-# attention_score). Until it is genuinely measured it reports from the bottom
-# of the scale rather than an invented 1. Sprint 1 removes the synthesis.
+# A domain nobody has played has no measured level. It reports the bottom of
+# the scale rather than an invented 1, and is replaced by a real stored base
+# level (nullable, so "uncalibrated" stays distinguishable) in Sprint 2.
 UNPLAYED_START_LEVEL = MIN_LEVEL
 
 # A device that has not synced in this long is shown as offline. The NER
@@ -102,44 +101,39 @@ def sudden_drop_z(sessions: list[GameSession]) -> float | None:
 
 # ── Domain scores ─────────────────────────────────────────────────────────────
 
-def attention_score(sessions: list[GameSession]) -> tuple[int | None, int]:
-    """Attention is not owned by a game — it is derived.
-
-    Two behavioural signals across every game: how often rounds are finished
-    rather than abandoned, and how steady the pace is. A patient who finishes
-    everything at an even pace is attending; one who drifts is not.
-    """
-    if not sessions:
-        return None, 0
-
-    completion = sum(1 for s in sessions if s.completed) / len(sessions)
-
-    durations = [s.duration_ms for s in sessions if s.duration_ms]
-    if len(durations) >= 3 and mean(durations) > 0:
-        # Coefficient of variation: lower spread = steadier pace.
-        steadiness = 1 - min(1.0, pstdev(durations) / mean(durations))
-    else:
-        steadiness = completion
-
-    return round((completion * 0.6 + steadiness * 0.4) * 100), len(sessions)
+# DELETED: attention_score(). Attention was the one domain with no game behind
+# it, synthesised as 0.6 x completion-rate + 0.4 x pace-steadiness across every
+# other game. Both terms were broken. Completion rate is a constant 1.0 on real
+# data because no game can log an abandoned round (every one passes
+# completed=True literally), so 60% of the score measured nothing at all; and
+# pace variance is a property of the task, not of the patient's attention.
+#
+# Attention gets a real go/no-go game in Sprint 4. Until then it reports "no
+# data", which is the honest answer. A synthesised number on a clinical trend
+# line is worse than a gap: a gap prompts a question, a number ends it.
 
 
 def domain_scores(
     db: Session, patient_id: int, sessions: list[GameSession]
 ) -> list[dict]:
-    """One entry per displayed domain, in a fixed order."""
+    """One entry per domain, six of them, always, in a fixed order.
+
+    Always six even when the patient has no data: a domain with nothing in it
+    comes back with score None rather than being omitted, so the dashboard
+    grid and the report agent both see a stable shape.
+    """
     latest_levels = _latest_levels(db, patient_id)
     out = []
 
     for domain in DOMAINS:
-        if domain in DERIVED_DOMAINS:
-            score, count = attention_score(sessions)
-            subset = sessions
-        else:
-            subset = [s for s in sessions if s.domain == domain]
-            rates = [r for r in (_accuracy(s) for s in subset) if r is not None]
-            score = round(mean(rates) * 100) if rates else None
-            count = len(subset)
+        # Every domain is measured the same way now: mean accuracy over the
+        # sessions that actually belong to it. No branch, no synthesis. A
+        # domain with no sessions scores None -- and a None score is what the
+        # dashboard renders as "no data yet", never as zero.
+        subset = [s for s in sessions if s.domain == domain]
+        rates = [r for r in (_accuracy(s) for s in subset) if r is not None]
+        score = round(mean(rates) * 100) if rates else None
+        count = len(subset)
 
         out.append(
             {
@@ -169,7 +163,8 @@ def _latest_levels(db: Session, patient_id: int) -> dict[str, int]:
     A domain with no sessions is simply absent from the returned map rather
     than defaulted, because "not measured yet" and "measured at the bottom of
     the scale" are different facts. Stored base levels replace this inference
-    entirely in Sprint 2.
+    entirely in Sprint 2 -- six numbers on the patient record, which is the
+    only thing that can represent six independently moving levels.
     """
     rows = (
         db.query(GameSession)
@@ -185,7 +180,6 @@ def _latest_levels(db: Session, patient_id: int) -> dict[str, int]:
         resolved = first_level(row.new_level, row.level)
         if resolved is not None:
             levels[row.domain] = resolved
-    levels.setdefault(DOMAIN_ATTENTION, UNPLAYED_START_LEVEL)
     return levels
 
 
@@ -299,7 +293,10 @@ def recommended_actions(
     if adherence_pct is not None and adherence_pct < 70:
         actions.append("Discuss reminder routine with the caregiver")
 
-    if any(d["sessions"] == 0 for d in domains if d["domain"] not in DERIVED_DOMAINS):
+    # Scoped to PLAYABLE_DOMAINS: attention and perceptual-motor have no game
+    # until Sprint 4, and telling a caregiver to try an activity that does not
+    # exist is worse than saying nothing.
+    if any(d["sessions"] == 0 for d in domains if d["domain"] in PLAYABLE_DOMAINS):
         actions.append("Encourage trying the untouched activity types")
 
     return actions

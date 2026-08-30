@@ -77,12 +77,22 @@ def sync_sessions(
                 continue
             seen.add(key)
 
+        # domain is NOT NULL, and an unrecognised game type resolves to None.
+        # Without this guard the insert fails a constraint and the IntegrityError
+        # handler below swallows it -- the row would vanish and the only trace
+        # would be the skipped count. Skip it here instead, for the same reason
+        # and visibly. Sprint 2 moves domain into the payload and retires this.
+        domain = domain_for_game(item.game_type)
+        if domain is None:
+            skipped += 1
+            continue
+
         session = GameSession(
             dexie_id=item.dexie_id,
             patient_id=item.patient_id,
             game_type=item.game_type,
             # Resolved here, once, rather than recomputed on every dashboard read.
-            domain=domain_for_game(item.game_type),
+            domain=domain,
             score=item.score,
             total=item.total,
             moves=item.moves,
@@ -113,7 +123,7 @@ def sync_sessions(
                         DifficultyHistory(
                             patient_id=item.patient_id,
                             game_type=item.game_type,
-                            domain=domain_for_game(item.game_type),
+                            domain=domain,
                             from_level=item.level,
                             to_level=item.new_level,
                             reason=item.reason,
