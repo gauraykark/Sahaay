@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Maskable variant: background fills the full canvas (edge-to-edge),
+       and the mark itself sits inside the ~80% "safe zone" so OS icon
+       masks (circle/squircle) don't clip it. -->
+  <rect width="48" height="48" fill="#f0f9f8"/>
+  <circle cx="18.5" cy="24" r="7.5" fill="#7eccc3"/>
+  <circle cx="29.5" cy="24" r="7.5" fill="#247a72"/>
+</svg>

@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+.venv/
+venv/
+*.pyc
+backend/.env
+backend/sahaay.db
+dist/
+.DS_Store
+backend/.env 

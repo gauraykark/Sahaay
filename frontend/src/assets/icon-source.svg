@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Sahaay mark: two calm, overlapping rounded forms suggesting support/companionship.
+       Flat fills only, single brand hue family, no gradients, glow, or blur —
+       intentionally restrained per the project's non-AI-slop design rules. -->
+  <rect width="48" height="48" rx="12" fill="#f0f9f8"/>
+  <circle cx="19" cy="24" r="10" fill="#7eccc3"/>
+  <circle cx="29" cy="24" r="10" fill="#247a72"/>
+</svg>
