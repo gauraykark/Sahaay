@@ -70,7 +70,9 @@ def read_content_ceilings(path: Path) -> dict[str, int]:
     text = path.read_text(encoding="utf-8")
     block = re.search(r"CONTENT_MAX_LEVEL\s*[:=]\s*\{(.*?)\}", text, re.S)
     if not block:
-        raise SystemExit(f"{path.name}: could not find CONTENT_MAX_LEVEL")
+        # Absent is the CORRECT end state. Sprint 3 deletes this table; a
+        # missing table is the goal, not a broken check.
+        return {}
 
     ceilings: dict[str, int] = {}
     for line in block.group(1).splitlines():
@@ -92,7 +94,6 @@ if js_ceilings != py_ceilings:
 for game, ceiling in sorted(py_ceilings.items()):
     if not MIN_LEVEL <= ceiling <= MAX_LEVEL:
         failures.append(f"CONTENT_MAX_LEVEL[{game}]={ceiling} is outside the scale")
-
 
 def strip_comments(text: str, suffix: str) -> list[str]:
     """Blank out comments and docstrings, keeping line numbers intact.
@@ -195,10 +196,51 @@ for path in source_files():
                 break
 
 
+# ── 4. The Sprint 3 tripwire ────────────────────────────────────────────────
+#
+# CONTENT_MAX_LEVEL only exists because the level banks are still fixed arrays.
+# difficultyFor(level) is the Sprint 3 deliverable that replaces them; once it
+# exists every level 0-15 is servable and the ceiling is wrong, not just
+# redundant. Left in place it caps the new scale at 5, and a patient pinned at
+# a ceiling reads exactly like a patient who stopped improving -- a silent
+# failure in the one number this whole app produces.
+#
+# So: the two may not coexist. Deleting the table is what turns this check off.
+
+GENERATOR = re.compile(r"\b(?:difficultyFor|difficulty_for)\s*\(")
+generator_sites = []
+
+for path in source_files():
+    if path.name == "check_level_parity.py":
+        continue
+    code = strip_comments(path.read_text(encoding="utf-8"), path.suffix)
+    for lineno, line in enumerate(code, 1):
+        if GENERATOR.search(line):
+            generator_sites.append(f"{path.relative_to(ROOT).as_posix()}:{lineno}")
+
+if generator_sites and py_ceilings:
+    failures.append(
+        "Sprint 3 has landed (difficultyFor exists at "
+        + ", ".join(generator_sites[:3])
+        + ") but CONTENT_MAX_LEVEL is still defined. Delete the table from "
+        "shared/levels.js and backend/app/levels.py, and let stepBounded clamp "
+        "to MAX_LEVEL alone -- otherwise the 0-15 scale is silently capped at "
+        f"{max(py_ceilings.values())}."
+    )
+
+
 if failures:
     print("LEVEL PARITY: FAIL")
     for line in failures:
         print(f"  - {line}")
     sys.exit(1)
 
-print(f"LEVEL PARITY: OK  (scale {MIN_LEVEL}-{MAX_LEVEL}, one definition per runtime)")
+ceiling_note = (
+    f", content ceiling active (remove in Sprint 3): {py_ceilings}"
+    if py_ceilings
+    else ", no content ceiling"
+)
+print(
+    f"LEVEL PARITY: OK  (scale {MIN_LEVEL}-{MAX_LEVEL}, one definition per "
+    f"runtime{ceiling_note})"
+)

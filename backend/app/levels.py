@@ -84,7 +84,9 @@ def first_level(*candidates: object) -> int | None:
     return UNCALIBRATED
 
 
-# ── Content ceiling (TEMPORARY -- remove in Sprint 3) ────────────────────────
+# ── Content ceiling ─────────────────────────────────────────────────────────
+#
+#                        >>> REMOVE IN SPRINT 3 <<<
 #
 # Mirror of CONTENT_MAX_LEVEL in shared/levels.js. See that file for the full
 # reasoning; the short version is that MAX_LEVEL is 15 but the level banks are
@@ -94,7 +96,11 @@ def first_level(*candidates: object) -> int | None:
 # These are the HIGHEST LEVEL EACH BANK SERVES, not the entry count. The banks
 # are 1-indexed, so a 4-entry bank serves levels 1-4 and its ceiling is 4.
 #
-# DELETE THIS TABLE in Sprint 3, alongside its JavaScript mirror.
+# REMOVE IN SPRINT 3, alongside its JavaScript mirror. When the parameterised
+# generator replaces the fixed arrays, every level 0-15 is servable on demand
+# and this ceiling stops existing -- step_bounded() must then clamp to
+# MAX_LEVEL alone. If the table survives the generator it silently caps the new
+# 0-15 scale at 5, which looks exactly like a patient who stopped improving.
 CONTENT_MAX_LEVEL = {
     "memory": 4,        # MEMORY_GRIDS keys 1-4 (2x2 .. 4x4)
     "routine": 4,       # ROUTINE_LEVELS, 4 scenarios, 4-16 steps

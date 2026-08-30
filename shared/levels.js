@@ -61,7 +61,9 @@ export function levelOrNull(value) {
   return Number.isFinite(n) ? clampLevel(n) : UNCALIBRATED;
 }
 
-// ── Content ceiling (TEMPORARY — remove in Sprint 3) ────────────────────────
+// ── Content ceiling ─────────────────────────────────────────────────────────
+//
+//                        >>> REMOVE IN SPRINT 3 <<<
 //
 // MAX_LEVEL is 15, but the level banks are still the old fixed arrays sized
 // for the 1-5 scale. Deleting LEVEL_BOUNDS removed the guard that kept a
@@ -80,8 +82,12 @@ export function levelOrNull(value) {
 // MAX_LEVEL alone. That is deliberate: the six DSM-5 domains arriving in
 // Sprint 4 are generated from the difficulty formula and have no fixed bank.
 //
-// DELETE THIS TABLE in Sprint 3, when the parameterised generator replaces
-// the fixed arrays and every level 0-15 can be served on demand.
+// REMOVE IN SPRINT 3. When difficultyFor(level) replaces the fixed arrays,
+// every level 0-15 is servable on demand and this ceiling stops existing --
+// stepBounded() must then clamp to MAX_LEVEL alone. If the table survives the
+// generator it silently caps the new 0-15 scale at 5, which looks exactly like
+// a patient who stopped improving. tools/check_level_parity.py fails the
+// moment difficultyFor exists while this table still does.
 export const CONTENT_MAX_LEVEL = {
   memory: 4, // MEMORY_GRIDS keys 1-4 (2x2 .. 4x4)
   routine: 4, // ROUTINE_LEVELS, 4 scenarios, 4-16 steps
