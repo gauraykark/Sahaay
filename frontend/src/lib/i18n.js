@@ -74,6 +74,12 @@ const strings = {
     name_recall: "नाम याद करना",
     name_recall_desc: "परिचित लोगों और स्थानों के नाम याद रखें",
 
+    // UNVERIFIED — needs native review.
+    // The six domain names below were written by Claude, not by a Hindi
+    // speaker. They render as-is: Hindi and Assamese are a problem-statement
+    // requirement, so an unreviewed term beats an English one. But they are
+    // clinical vocabulary on a caregiver's screen, so a native speaker should
+    // read them and delete this marker. Until then, treat them as a draft.
     // छह क्षेत्र — रोगी इन्हें कभी नहीं देखता, ये देखभालकर्ता की स्क्रीन के लिए हैं।
     domain_attention: "ध्यान",
     domain_executive: "योजना और क्रम",
@@ -111,6 +117,12 @@ const strings = {
     name_recall: "নাম স্মৰণ",
     name_recall_desc: "পৰিচিত মানুহ আৰু ঠাইৰ নাম মনত ৰাখক",
 
+    // UNVERIFIED — needs native review.
+    // As above: written by Claude, not by an Assamese speaker. Assamese is the
+    // language this app exists for, so these ship rather than falling back to
+    // English — but nobody has checked that "পৰিকল্পনা আৰু ক্ৰম" is what a
+    // clinician in Assam would actually say for executive function. A native
+    // speaker should read all six and delete this marker.
     // The six domains, for the caregiver's screens. The patient never sees them.
     domain_attention: "মনোযোগ",
     domain_executive: "পৰিকল্পনা আৰু ক্ৰম",
