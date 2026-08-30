@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 
 import { DOMAIN_LABELS_EN } from "@shared/domainLabels";
 import { difficultyFor } from "@shared/levels";
-import { allPreviewAssetUrls, previewItemsFor } from "@shared/previewItems";
+import { objectUrl, selectSessionItems } from "@shared/itemBank";
 
 const ALL_LEVELS = [0, 7, 15];
 
@@ -77,6 +77,16 @@ function Shape({ name, rotation, size = 56 }) {
   );
 }
 
+// Preview-only English. The games render these through t() -- see i18n.
+const PROMPTS = {
+  "go-no-go": () => "Tap the green circle. Do not tap the red one.",
+  "put-in-order": () => "Put these in the order you do them.",
+  "which-did-you-see": () => "Which one did you see?",
+  "what-is-this": () => "What is this called?",
+  "match-the-shape": () => "Tap the shape that matches.",
+  "how-are-they-feeling": (i) => `How is ${i.pronoun} feeling?`,
+};
+
 function Chip({ children, tone = "neutral" }) {
   const tones = {
     neutral: "bg-neutral-100 text-neutral-700 border-neutral-300",
@@ -93,19 +103,19 @@ function ItemBody({ item }) {
     case "go-no-go":
       return (
         <div className="flex flex-wrap gap-1.5 items-center">
-          {Array.from({ length: Math.min(item.config.goCount, 18) }).map((_, i) => (
+          {Array.from({ length: Math.min(item.goCount, 18) }).map((_, i) => (
             <span key={`g${i}`} className="w-6 h-6 rounded-full bg-emerald-500 inline-block" />
           ))}
-          {Array.from({ length: Math.min(item.config.noGoCount, 18) }).map((_, i) => (
+          {Array.from({ length: Math.min(item.noGoCount, 18) }).map((_, i) => (
             <span key={`n${i}`} className="w-6 h-6 rounded-full bg-red-500 inline-block" />
           ))}
           <div className="w-full mt-2 flex gap-1.5 flex-wrap">
-            <Chip>{item.config.stimuli} stimuli</Chip>
-            <Chip tone={item.config.noGoRatio === 0 ? "teal" : "neutral"}>
-              no-go {Math.round(item.config.noGoRatio * 100)}%
+            <Chip>{item.stimuli} stimuli</Chip>
+            <Chip tone={item.noGoRatio === 0 ? "teal" : "neutral"}>
+              no-go {Math.round(item.noGoRatio * 100)}%
             </Chip>
-            <Chip>{item.config.windowMs}ms window</Chip>
-            <Chip>target {item.config.targetSize}</Chip>
+            <Chip>{item.windowMs}ms window</Chip>
+            <Chip>target {item.targetSize}</Chip>
           </div>
         </div>
       );
@@ -143,11 +153,11 @@ function ItemBody({ item }) {
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-              after a {item.gap.durationMs}ms gap — {item.ask.prompt}
+              after a {item.gap.durationMs}ms gap — which one did you see?
             </p>
             <div className="flex flex-wrap gap-2">
-              {item.ask.options.map((k, i) => (
-                <Img key={k} src={item.ask.urls[i]} alt={k} size={72} />
+              {item.ask.options.map((k) => (
+                <Img key={k} src={objectUrl(k)} alt={k} size={72} />
               ))}
             </div>
           </div>
@@ -194,17 +204,25 @@ function ItemBody({ item }) {
         </div>
       );
 
-    case "which-face":
+    case "how-are-they-feeling":
       return (
         <div className="space-y-2">
+          {/* ONE face. The options below are emotion words, never faces --
+              that is what keeps actor identity out of the task. */}
+          <Img src={item.imageUrl} alt={item.face} size={120} />
           <div className="flex flex-wrap gap-2">
-            {item.faces.map((f) => (
-              <Img key={f.key} src={f.url} alt={f.emotion} size={84} />
+            {item.options.map((o) => (
+              <span
+                key={o}
+                className="px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-sm"
+              >
+                {o}
+              </span>
             ))}
           </div>
           <div className="flex gap-1.5 flex-wrap">
-            <Chip>{item.faces.length} options</Chip>
-            <Chip tone="teal">all one person ({item.person})</Chip>
+            <Chip>{item.options.length} emotion words</Chip>
+            <Chip tone="teal">single face</Chip>
           </div>
         </div>
       );
@@ -220,7 +238,17 @@ export default function ItemPreview() {
 
   useEffect(() => {
     let cancelled = false;
-    const urls = allPreviewAssetUrls();
+    const urls = [
+      ...new Set(
+        ALL_LEVELS.flatMap((lvl) =>
+          selectSessionItems({ level: lvl, seed: lvl }).flatMap(({ item }) => [
+            ...(item.show?.urls ?? []),
+            ...(item.ask?.options ? item.ask.options.map(objectUrl) : []),
+            ...(item.imageUrl ? [item.imageUrl] : []),
+          ])
+        )
+      ),
+    ];
     Promise.all(
       urls.map(
         (u) =>
@@ -266,7 +294,7 @@ export default function ItemPreview() {
 
       {levels.map((level) => {
         const d = difficultyFor(level);
-        const items = previewItemsFor(level);
+        const items = selectSessionItems({ level, seed: level }).map((r) => r.item);
         return (
           <section key={level} className="mb-8">
             <div className="flex items-baseline gap-3 mb-3 border-b border-neutral-300 pb-2">
@@ -288,7 +316,7 @@ export default function ItemPreview() {
                     </h3>
                     {item.generated && <Chip tone="teal">generated</Chip>}
                   </div>
-                  <p className="text-sm text-neutral-700 mb-3">{item.prompt ?? item.ask?.prompt}</p>
+                  <p className="text-sm text-neutral-700 mb-3">{PROMPTS[item.template]?.(item) ?? item.template}</p>
                   <ItemBody item={item} />
                 </article>
               ))}

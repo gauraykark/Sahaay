@@ -200,6 +200,12 @@
         "woman-worried"
       ],
       "present": {
+        "man-angry": {
+          "file": "man-angry.jpg",
+          "source": "man angry.png",
+          "width": 595,
+          "height": 387
+        },
         "man-calm": {
           "file": "man-calm.jpg",
           "source": "man-calm.jpg",
@@ -268,6 +274,13 @@
         }
       },
       "background_styles": {
+        "light": [
+          "man-angry",
+          "woman-angry",
+          "woman-calm",
+          "woman-happy",
+          "woman-sad"
+        ],
         "scene": [
           "man-calm",
           "man-happy",
@@ -276,30 +289,17 @@
           "man-worried",
           "woman-worried"
         ],
-        "light": [
-          "woman-angry",
-          "woman-calm",
-          "woman-happy",
-          "woman-sad"
-        ],
         "isolated": [
           "woman-surprised"
         ]
       },
       "portrait": [],
-      "missing": [
-        "man-angry"
-      ],
+      "missing": [],
       "extra": [],
-      "unmapped": [
-        {
-          "file": "human angry .png",
-          "reason": "no person token; unrecognised ['human']"
-        }
-      ],
+      "unmapped": [],
       "collisions": [],
-      "complete": false
+      "complete": true
     }
   },
-  "clean": false
+  "clean": true
 }

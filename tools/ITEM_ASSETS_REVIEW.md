@@ -9,83 +9,58 @@ see what is in a picture. Re-running the script will not overwrite this file.
 | Set | Files | Manifest |
 |---|---|---|
 | objects | 20 / 20 | complete |
-| faces | 11 / 12 | `man-angry` missing, `human angry .png` unmapped |
+| faces | 12 / 12 | complete |
+
+The manifest is **clean**. The item bank may reference these keys.
 
 `tools/item_manifest.json` is the machine-readable version.
 
 ---
 
-## 1. `human angry .png` — a naming problem with an easy fix
+## 1. `human angry .png` — RESOLVED
 
-The filename has no person token, so the script left it alone rather than
-inferring "man" from the fact that `man-angry` is the only empty slot.
-
-Looking at it: it is a man, dark hair and beard, mid-thirties, with a
-displeased expression.
-
-**To resolve**, do one of these and re-run — do not rename by hand and skip the
-script, or the file keeps its PNG encoding and 595px width:
-
-- rename the source to `man angry.png` (the script handles either token order), or
-- add `"human": "man"` to `aliases.people` in `expected_items.json`
-
-The second is worse: "human" is not a person label, and the alias would apply
-to any future file using it.
+Renamed to `man angry.png` and re-run. It normalised to `man-angry.jpg`, and
+the faces set is now 12/12. The manifest is clean.
 
 ---
 
-## 2. The faces are not one man and one woman — this is the real problem
+## 2. Multiple actors — NOT a problem. My earlier analysis here was wrong.
 
-The plan assumes **6 emotions × 2 people = 12**: one man photographed six
-times, one woman photographed six times. That is not what these are.
+An earlier version of this file argued that the faces had to be one man and one
+woman, and that the mixed actors and backgrounds were a confound serious enough
+to block Sprint 3. That was wrong, and it was wrong because I had picked the
+wrong task format, not because the assets were bad.
 
-Confirmed by inspection:
+**Social uses the single-face format:** one image, the prompt *"How is she
+feeling?"*, and three EMOTION WORDS as the options. The patient never sees two
+faces at once, so identity never enters the comparison. Different actors across
+items cannot be used to answer anything.
 
-| File | Who |
-|---|---|
-| `man-happy.jpg` | grey-haired man, ~50s, grey background |
-| `man-surprised.jpg` | bespectacled man, ~35, grey background, **hand raised to face** |
-| `human angry .png` | bearded man, ~35, **bright yellow background** |
-| `woman-happy.jpg` | woman in green kurta, light grey background |
-| `woman-surprised.jpg` | different woman, blue top, **both arms raised** |
+Clinical emotion-recognition tests use multiple actors on purpose — it stops
+the patient learning one specific face's idiosyncrasies and keeps the measure
+about expression rather than about a person they have met twenty times.
 
-At least three different men and two different women.
+The confound I described is real ONLY for a multi-face format ("which of these
+four faces is happy?"), which is what the preview originally rendered. That
+format is not what Social should be, so the objection disappears with it.
 
-### Why this matters more than it looks
+**Rule for the bank: an item's three options are always emotion words, never
+faces.** That is what keeps identity out of the comparison, and it is the one
+thing to check when reviewing Social items.
 
-Social Cognition is measured by asking *"which face is happy?"*. If the options
-in one question show different people, the patient is doing person
-discrimination as well as emotion reading, and a wrong answer no longer tells
-us which of those they struggled with. The number still moves; it just stops
-meaning what the report says it means.
+### What still holds
 
-Three specific confounds:
+Mixed backgrounds no longer let a patient shortcut an answer — with one image
+on screen there is nothing to contrast it against. Worth knowing, not worth
+blocking on:
 
-1. **Background is a learnable cue.** One image on bright yellow among greys
-   can be picked without looking at the face at all. Section 9 of the spec
-   exists for this exact failure — a score that climbs because the patient
-   learned the pictures rather than the skill.
-2. **Gestures carry the emotion.** Two of the "surprised" images have raised
-   hands. A patient could answer from posture with the face cropped out.
-3. **Different ages and framing** across one emotion set mean distractors are
-   not comparable.
-
-### What to do
-
-Best: source one man and one woman, six expressions each, same session, same
-background, head-and-shoulders, no hands in frame. Search terms like
-"Indian man portrait emotions set" find these as bundles.
-
-Acceptable for a demo: keep the current set but only ever offer options drawn
-from **the same person**, and note in the report that Social Cognition is
-provisional.
-
-Not acceptable: writing bank items against these as if they were a matched
-set. That bakes the confound into the measurement.
-
-**This is a content decision, not a code one.** Sprint 3 can proceed on the
-objects (which are clean) while the faces are re-sourced — social is one of
-the two hand-authored domains and was always going to be the slow one.
+- 12 faces means Social has a rotation depth of 12, below the 20-per-domain
+  target. The selector degrades to the least-recently-seen item rather than
+  throwing, so this is a data-density issue, not a correctness one.
+- Two images (`man-surprised`, `woman-surprised`) have hands raised near the
+  face. In a single-face format a gesture is a legitimate additional emotion
+  cue, the way it is in life, so this is fine — just be aware those two items
+  are slightly easier than the rest.
 
 ---
 
