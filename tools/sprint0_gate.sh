@@ -25,6 +25,7 @@ run() {
 run "level scale parity + falsy-zero sweep" "$PY" tools/check_level_parity.py
 run "shared scale, client" node tools/test_levels.mjs
 run "level zero round trip, server" "$PY" tools/test_level_zero_roundtrip.py
+run "content overflow, all four banks" node tools/test_content_overflow.mjs
 
 echo
 if [ "$status" -ne 0 ]; then

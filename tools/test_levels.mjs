@@ -10,8 +10,10 @@ import {
   MIN_LEVEL,
   UNCALIBRATED,
   clampLevel,
+  contentMaxLevel,
   isLevel,
   levelOrNull,
+  stepBounded,
 } from "../shared/levels.js";
 
 const passed = [];
@@ -55,6 +57,31 @@ check('levelOrNull("nope") is null', levelOrNull("nope"), null);
 // must not be re-implemented here -- two copies of that rule is what broke the
 // old model.
 check("clamp does not limit step size", clampLevel(12), 12);
+
+// ── stepBounded: one step, then into range ─────────────────────────────────
+// The Python mirror asserts the same cases. Both must agree.
+
+check("steps up by one", stepBounded(9, 2, "objects"), 3);
+check("steps down by one", stepBounded(0, 4, "objects"), 3);
+check("holds when proposal equals current", stepBounded(3, 3, "objects"), 3);
+check("caps at the bank ceiling", stepBounded(9, 4, "memory"), 4);
+check("never goes below MIN_LEVEL", stepBounded(-5, 0, "memory"), 0);
+check("uncalibrated current: bounds only, no step limit", stepBounded(9, null, "objects"), 5);
+check("no proposal leaves the patient where they are", stepBounded(null, 3, "memory"), 3);
+check("no proposal and uncalibrated stays uncalibrated", stepBounded(null, null, "memory"), null);
+check("unknown game type is bounded by MAX_LEVEL", contentMaxLevel("social"), MAX_LEVEL);
+check("unknown game type still gets the step limit", stepBounded(9, 1, "social"), 2);
+
+// The top of every bank must stay reachable -- `bankSize - 1` would not.
+check("memory level 4 reachable", stepBounded(4, 3, "memory"), 4);
+check("routine level 4 reachable", stepBounded(4, 3, "routine"), 4);
+check("objects level 5 reachable", stepBounded(5, 4, "objects"), 5);
+check("name-recall level 5 reachable", stepBounded(5, 4, "name-recall"), 5);
+
+// A level stored above the ceiling is an impossible state; correcting it may
+// take more than one step, but only downward.
+check("above-ceiling level corrects down to playable", stepBounded(16, 15, "memory"), 4);
+check("the correction is downward only", stepBounded(15, 15, "memory"), 4);
 
 for (const name of passed) console.log(`  PASS  ${name}`);
 for (const line of failed) console.log(`  FAIL  ${line}`);

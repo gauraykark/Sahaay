@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..domains import GAME_LABELS, GAME_TYPES, domain_for_game
-from ..levels import MIN_LEVEL, clamp_level, first_level
+from ..levels import MIN_LEVEL, first_level, step_bounded
 from ..models import GameSession, Patient
 from . import analytics
 
@@ -184,9 +184,13 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             continue
         current = session_data[gt]["current"]
 
-        good_lvl = clamp_level(game_out.level_if_good)
-        ok_lvl   = clamp_level(game_out.level_if_ok)
-        poor_lvl = clamp_level(game_out.level_if_poor)
+        # The model is told to move at most one level. step_bounded is the
+        # enforcement, and it also keeps the proposal inside what that game's
+        # bank can actually serve -- without it a returned level of 9 would be
+        # stored and displayed while the patient played the level-4 board.
+        good_lvl = step_bounded(game_out.level_if_good, current, gt)
+        ok_lvl   = step_bounded(game_out.level_if_ok,   current, gt)
+        poor_lvl = step_bounded(game_out.level_if_poor, current, gt)
 
         # No DifficultyHistory written here. These three levels are branches
         # for a round that has not been played yet — recording them would put
@@ -213,9 +217,9 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             plans.append({
                 "game_type": game_type,
                 "current_level": current,
-                "if_good":  {"level": clamp_level(current + 1), "reason": f"Doing beautifully — let's try a little more next time."},
-                "if_ok":    {"level": clamp_level(current), "reason": f"Steady and consistent — same level next time."},
-                "if_poor":  {"level": clamp_level(current - 1), "reason": f"We'll take it a little easier next time."},
+                "if_good":  {"level": step_bounded(current + 1, current, game_type), "reason": f"Doing beautifully — let's try a little more next time."},
+                "if_ok":    {"level": step_bounded(current,     current, game_type), "reason": f"Steady and consistent — same level next time."},
+                "if_poor":  {"level": step_bounded(current - 1, current, game_type), "reason": f"We'll take it a little easier next time."},
             })
 
     next_game = result.next_game if result.next_game in GAME_TYPES else _suggest_next_game(db, patient)
@@ -259,15 +263,15 @@ def _rule_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
                 "game_type": game_type,
                 "current_level": current,
                 "if_good": {
-                    "level": clamp_level(current + 1),
+                    "level": step_bounded(current + 1, current, game_type),
                     "reason": f"Doing well — {label} will step up a little.",
                 },
                 "if_ok": {
-                    "level": clamp_level(current),
+                    "level": step_bounded(current, current, game_type),
                     "reason": f"{label} stays at the same level next time.",
                 },
                 "if_poor": {
-                    "level": clamp_level(current - 1),
+                    "level": step_bounded(current - 1, current, game_type),
                     "reason": f"{label} will be a little gentler next time.",
                 },
             }

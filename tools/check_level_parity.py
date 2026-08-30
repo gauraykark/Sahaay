@@ -61,6 +61,39 @@ if (MIN_LEVEL, MAX_LEVEL) != (0, 15):
     failures.append(f"scale is {MIN_LEVEL}-{MAX_LEVEL}, spec says 0-15")
 
 
+def read_content_ceilings(path: Path) -> dict[str, int]:
+    """Parse the CONTENT_MAX_LEVEL table out of either mirror.
+
+    The table is a temporary guard keeping a proposed level inside what the
+    old fixed banks can serve. It exists twice, so it can drift twice.
+    """
+    text = path.read_text(encoding="utf-8")
+    block = re.search(r"CONTENT_MAX_LEVEL\s*[:=]\s*\{(.*?)\}", text, re.S)
+    if not block:
+        raise SystemExit(f"{path.name}: could not find CONTENT_MAX_LEVEL")
+
+    ceilings: dict[str, int] = {}
+    for line in block.group(1).splitlines():
+        match = re.match(r"""\s*["']?([\w-]+)["']?\s*:\s*(\d+)""", line)
+        if match:
+            ceilings[match.group(1)] = int(match.group(2))
+    return ceilings
+
+
+js_ceilings = read_content_ceilings(JS_SCALE)
+py_ceilings = read_content_ceilings(PY_SCALE)
+
+if js_ceilings != py_ceilings:
+    failures.append(
+        f"CONTENT_MAX_LEVEL disagrees: shared/levels.js={js_ceilings}, "
+        f"levels.py={py_ceilings}"
+    )
+
+for game, ceiling in sorted(py_ceilings.items()):
+    if not MIN_LEVEL <= ceiling <= MAX_LEVEL:
+        failures.append(f"CONTENT_MAX_LEVEL[{game}]={ceiling} is outside the scale")
+
+
 def strip_comments(text: str, suffix: str) -> list[str]:
     """Blank out comments and docstrings, keeping line numbers intact.
 

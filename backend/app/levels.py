@@ -82,3 +82,67 @@ def first_level(*candidates: object) -> int | None:
         if resolved is not None:
             return resolved
     return UNCALIBRATED
+
+
+# ── Content ceiling (TEMPORARY -- remove in Sprint 3) ────────────────────────
+#
+# Mirror of CONTENT_MAX_LEVEL in shared/levels.js. See that file for the full
+# reasoning; the short version is that MAX_LEVEL is 15 but the level banks are
+# still the fixed arrays sized for the old 1-5 scale, and deleting LEVEL_BOUNDS
+# removed the guard that kept a proposed level inside them.
+#
+# These are the HIGHEST LEVEL EACH BANK SERVES, not the entry count. The banks
+# are 1-indexed, so a 4-entry bank serves levels 1-4 and its ceiling is 4.
+#
+# DELETE THIS TABLE in Sprint 3, alongside its JavaScript mirror.
+CONTENT_MAX_LEVEL = {
+    "memory": 4,        # MEMORY_GRIDS keys 1-4 (2x2 .. 4x4)
+    "routine": 4,       # ROUTINE_LEVELS, 4 scenarios, 4-16 steps
+    "objects": 5,       # objectsQuestionCount caps at 5 (25 questions)
+    "name-recall": 5,   # NAME_RECALL_CIRCLES, levels 1-5
+}
+
+
+def content_max_level(game_type: str) -> int:
+    """Highest level ``game_type``'s bank serves, or MAX_LEVEL if it has none."""
+    ceiling = CONTENT_MAX_LEVEL.get(game_type)
+    if ceiling is None:
+        return MAX_LEVEL
+    return min(MAX_LEVEL, ceiling)
+
+
+def step_bounded(
+    proposed: int | float | None,
+    current: int | float | None,
+    game_type: str,
+) -> int | None:
+    """Bound a proposed level: at most one step from current, then into range.
+
+    The step limit lives here, in one definition both runtimes import, because
+    the two independent +/-1 clamps this replaces had already drifted apart and
+    made real content unreachable. It is an interim guard on the per-round
+    coach -- the clinical rule it stands in for is "max +/-1 per domain per
+    week", which belongs to the weekly evaluator in Sprint 6.
+
+    The content ceiling is a HARD clamp applied after the step limit, so it can
+    move a level down by more than one step -- but only downward, and only for
+    a patient already stored above what their game can serve. That is a
+    one-time correction of an impossible state, not adaptation: there is no
+    level-9 memory board to hand them. It disappears with the ceiling in
+    Sprint 3.
+
+    An uncalibrated ``current`` imposes no step limit (there is nothing to step
+    from), only the bounds. A proposal that is not a usable number leaves the
+    patient where they are rather than inventing a level.
+    """
+    frm = level_or_none(current)
+    nxt = level_or_none(proposed)
+
+    if nxt is None:
+        return frm
+
+    if frm is not None:
+        nxt = min(nxt, frm + 1)
+        nxt = max(nxt, frm - 1)
+
+    return max(MIN_LEVEL, min(content_max_level(game_type), nxt))

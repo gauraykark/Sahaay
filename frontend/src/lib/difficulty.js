@@ -18,7 +18,7 @@
 //
 // See g_prop_02_architecture.md D3-D5, D9, D10.
 
-import { clampLevel } from "@shared/levels";
+import { stepBounded } from "@shared/levels";
 
 import { getAIPlan, isPreviewMode, markPlanUsed, setDifficulty } from "./db";
 import { GAME_LEVEL_META } from "./gameContent";
@@ -30,9 +30,11 @@ import { nextDifficultyLevel, nextLevelByAccuracy } from "./utils";
 // name-recall 5 vs 3), which is how whole levels of content became
 // unreachable through the AI path.
 //
-// Bounds now come from shared/levels.js, imported by both sides. Step limiting
-// is not a bound: it is a clinical rule (max +/-1 per domain per week) and it
-// belongs to the weekly evaluator, in one place, not to every caller.
+// Both are replaced by stepBounded() in shared/levels.js -- one definition
+// that both runtimes import, so they cannot drift again. It still limits a
+// proposal to one step and still keeps it inside what the level banks can
+// serve; it just does so from a single source, and the bank ceiling is
+// explicitly temporary (Sprint 3 removes it with the fixed arrays).
 
 // ── How the round went ────────────────────────────────────────────────────────
 
@@ -146,7 +148,7 @@ export async function resolveNextLevel({ gameType, currentLevel, stats }) {
       outcomeOf(stats)
     ];
 
-    newLevel = clampLevel(branch.level);
+    newLevel = stepBounded(branch.level, currentLevel, gameType);
     reason = branch.reason;
     source = plan.source === "ai" ? "ai" : "rule";
     // A preview round must not age the patient's plan toward staleness.
@@ -154,7 +156,11 @@ export async function resolveNextLevel({ gameType, currentLevel, stats }) {
   } else {
     // No plan, or it expired. The rule engine has always worked offline and
     // still does — this is the floor, not an error path.
-    newLevel = clampLevel(ruleBasedNext({ gameType, currentLevel, stats }));
+    newLevel = stepBounded(
+      ruleBasedNext({ gameType, currentLevel, stats }),
+      currentLevel,
+      gameType
+    );
     reason = ruleReason(newLevel, currentLevel);
     source = "rule";
   }

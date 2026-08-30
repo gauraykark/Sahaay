@@ -31,9 +31,11 @@ from app.levels import (  # noqa: E402
     MAX_LEVEL,
     MIN_LEVEL,
     clamp_level,
+    content_max_level,
     first_level,
     is_level,
     level_or_none,
+    step_bounded,
 )
 from app.models import GameSession, Patient, User  # noqa: E402
 from app.services import agents, analytics  # noqa: E402
@@ -72,6 +74,32 @@ check('level_or_none("0") is 0', level_or_none("0"), 0)
 check("first_level(0, 3) is 0 not 3", first_level(0, 3), 0)
 check("first_level(None, 0) is 0 not 1", first_level(None, 0), 0)
 check("first_level(None, None) is None", first_level(None, None), None)
+
+
+# ── step_bounded: one step, then into range ──────────────────────────────────
+# The JavaScript mirror asserts the same cases. Both must agree.
+
+check("steps up by one", step_bounded(9, 2, "objects"), 3)
+check("steps down by one", step_bounded(0, 4, "objects"), 3)
+check("holds when proposal equals current", step_bounded(3, 3, "objects"), 3)
+check("caps at the bank ceiling", step_bounded(9, 4, "memory"), 4)
+check("never goes below MIN_LEVEL", step_bounded(-5, 0, "memory"), 0)
+check("uncalibrated current: bounds only", step_bounded(9, None, "objects"), 5)
+check("no proposal holds current", step_bounded(None, 3, "memory"), 3)
+check("no proposal, uncalibrated stays None", step_bounded(None, None, "memory"), None)
+check("unknown game type bounded by MAX_LEVEL", content_max_level("social"), MAX_LEVEL)
+check("unknown game type still step limited", step_bounded(9, 1, "social"), 2)
+
+# The top of every bank must stay reachable -- `bankSize - 1` would not.
+check("memory level 4 reachable", step_bounded(4, 3, "memory"), 4)
+check("routine level 4 reachable", step_bounded(4, 3, "routine"), 4)
+check("objects level 5 reachable", step_bounded(5, 4, "objects"), 5)
+check("name-recall level 5 reachable", step_bounded(5, 4, "name-recall"), 5)
+
+# A level stored above the ceiling is an impossible state; correcting it may
+# take more than one step, but only downward.
+check("above-ceiling level corrects down to playable", step_bounded(16, 15, "memory"), 4)
+check("the correction is downward only", step_bounded(15, 15, "memory"), 4)
 
 
 # ── Round trip through the database and analytics ────────────────────────────
@@ -168,7 +196,9 @@ for i in range(6):
 db.commit()
 plan = agents._rule_difficulty_plan(db, patient, lookback=8)
 objects_plan = next(p for p in plan["plans"] if p["game_type"] == "objects")
-check("rule plan caps at 15", objects_plan["if_good"]["level"], MAX_LEVEL)
+# Seeded at MAX_LEVEL, which objects' bank cannot serve. The ceiling is a hard
+# clamp, so it corrects downward to the highest playable level in one move.
+check("rule plan caps objects at its bank ceiling", objects_plan["if_good"]["level"], 5)
 
 db.close()
 
