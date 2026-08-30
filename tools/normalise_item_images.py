@@ -176,6 +176,38 @@ def map_face(path: Path, spec: dict) -> tuple[str | None, str | None]:
 
 # ── Image work ───────────────────────────────────────────────────────────────
 
+def background_style(path: Path) -> tuple[str, float, float]:
+    """Guess whether an image is an isolated product shot or a busy scene.
+
+    Samples the border pixels: a cutout on white has a pale frame, a photograph
+    taken in a room does not. Crude, but it catches the thing that matters --
+    a set where most images are isolated and a few are not gives the patient a
+    cue that has nothing to do with the skill being measured. Same failure as
+    the yellow background in the faces set.
+
+    Returns (style, mean border brightness, aspect ratio).
+    """
+    with Image.open(path) as im:
+        grey = im.convert("L")
+        w, h = grey.size
+        px = grey.load()
+        border = []
+        for x in range(0, w, 4):
+            border += [px[x, 0], px[x, h - 1]]
+        for y in range(0, h, 4):
+            border += [px[0, y], px[w - 1, y]]
+        edge = sum(border) / len(border)
+        aspect = w / h
+
+    if edge > 225:
+        style = "isolated"
+    elif edge > 180:
+        style = "light"
+    else:
+        style = "scene"
+    return style, edge, aspect
+
+
 def already_normalised(path: Path) -> bool:
     """True when re-encoding this file would only cost quality.
 
@@ -430,9 +462,32 @@ def main() -> int:
         else:
             clean = False
 
+        # Consistency of presentation. Not a gap, but the same class of
+        # problem: an image that stands out for a reason unrelated to the
+        # question can be answered without doing the task.
+        styles: dict[str, list[str]] = {}
+        odd_aspect = []
+        for key, entry in present.items():
+            path = args.root / kind / entry["file"]
+            if not path.exists():
+                continue
+            style, _edge, aspect = background_style(path)
+            styles.setdefault(style, []).append(key)
+            if aspect < 0.9:
+                odd_aspect.append(key)
+
+        if len(styles) > 1:
+            dominant = max(styles, key=lambda s: len(styles[s]))
+            odd = sorted(k for s, ks in styles.items() if s != dominant for k in ks)
+            print(f"    MIXED BACKGROUNDS: mostly {dominant}, but {odd} differ")
+        if odd_aspect:
+            print(f"    PORTRAIT (rest are landscape): {sorted(odd_aspect)}")
+
         manifest["sets"][kind] = {
             "expected": want,
             "present": present,
+            "background_styles": {s: sorted(ks) for s, ks in styles.items()},
+            "portrait": sorted(odd_aspect),
             "missing": missing,
             "extra": extra,
             "unmapped": unmapped,

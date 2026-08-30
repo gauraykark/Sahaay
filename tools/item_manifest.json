@@ -147,6 +147,37 @@
           "height": 307
         }
       },
+      "background_styles": {
+        "isolated": [
+          "banana",
+          "basket",
+          "bicycle",
+          "bucket",
+          "clock",
+          "coconut",
+          "comb",
+          "cow",
+          "lamp",
+          "pot",
+          "slippers",
+          "soap",
+          "spoon",
+          "teacup",
+          "umbrella"
+        ],
+        "scene": [
+          "fish",
+          "jackfruit",
+          "kettle",
+          "plate"
+        ],
+        "light": [
+          "rice"
+        ]
+      },
+      "portrait": [
+        "kettle"
+      ],
       "missing": [],
       "extra": [],
       "unmapped": [],
@@ -236,6 +267,26 @@
           "height": 562
         }
       },
+      "background_styles": {
+        "scene": [
+          "man-calm",
+          "man-happy",
+          "man-sad",
+          "man-surprised",
+          "man-worried",
+          "woman-worried"
+        ],
+        "light": [
+          "woman-angry",
+          "woman-calm",
+          "woman-happy",
+          "woman-sad"
+        ],
+        "isolated": [
+          "woman-surprised"
+        ]
+      },
+      "portrait": [],
       "missing": [
         "man-angry"
       ],

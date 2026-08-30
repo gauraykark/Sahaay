@@ -135,3 +135,32 @@ export function stepBounded(proposed, current, gameType) {
 
   return Math.max(MIN_LEVEL, Math.min(contentMaxLevel(gameType), next));
 }
+
+// ── The difficulty formula ──────────────────────────────────────────────────
+//
+// One formula, every domain, every level. No hand-made tables: because it is a
+// formula, adding levels costs nothing and the same level means the same thing
+// in every game.
+//
+// The level controls DIFFICULTY AND NOTHING ELSE. It does not decide which
+// games appear, swap in other content, or lock anything. A patient at level 0
+// still plays, still scores, still appears on the trend line -- their items are
+// just two at a time and fully cued. The moment scoring stops their line goes
+// flat, and nobody can tell "steady" from "we gave up".
+//
+// No sub-levels. Granularity comes from these knobs moving inside a level.
+export function difficultyFor(level) {
+  const l = clampLevel(level) ?? MIN_LEVEL;
+  return {
+    // 2x2 at level 0, up to 8x8 from level 12.
+    gridSize: Math.min(2 + Math.floor(l / 2), 8),
+    // 2 items at level 0, 17 at level 15.
+    itemCount: 2 + l,
+    // Never. Timers create anxiety, and a tired score looks exactly like a
+    // declining one. Response time is logged silently instead.
+    timerSec: null,
+    // How much help is on screen: the word beside the picture, a first letter,
+    // or nothing at all.
+    cueLevel: l < 5 ? "full" : l < 10 ? "partial" : "none",
+  };
+}

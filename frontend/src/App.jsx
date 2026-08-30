@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, RequireRole } from "./lib/auth";
 
+import ItemPreview from "./pages/ItemPreview";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import PatientHome from "./pages/PatientHome";
@@ -59,6 +60,11 @@ function App() {
               </RequireRole>
             }
           />
+
+          {/* Developer surface: one item per domain at levels 0/7/15.
+              Not patient-facing, nothing here is scored or logged.
+              Remove once the six games exist and can be played directly. */}
+          <Route path="/preview/items" element={<ItemPreview />} />
 
           <Route path="*" element={<Landing />} />
         </Routes>

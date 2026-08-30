@@ -262,6 +262,28 @@ DSM5 = ["attention", "executive", "memory", "language", "perceptual_motor", "soc
 if py_domains != DSM5:
     failures.append(f"DOMAINS is {py_domains}, spec says the six DSM-5 domains {DSM5}")
 
+def read_name_list(path: Path, name: str) -> list[str]:
+    """A flat list of string literals assigned to `name`.
+
+    The lookbehind matters: a plain search for GAME_TYPES also matches inside
+    TARGET_GAME_TYPES, which is declared first, so the legacy list would come
+    back as the target list and every legacy ceiling would look orphaned.
+    """
+    text = path.read_text(encoding="utf-8")
+    block = re.search(r"(?<![A-Z_])" + name + r"\s*[:=]\s*\[(.*?)\]", text, re.S)
+    if not block:
+        return []
+    return re.findall(r"""["']([\w-]+)["']""", block.group(1))
+
+
+def read_target_games(path: Path) -> list[str]:
+    return read_name_list(path, "TARGET_GAME_TYPES")
+
+
+def read_legacy_games(path: Path) -> list[str]:
+    return read_name_list(path, "GAME_TYPES")
+
+
 js_games = read_game_map(JS_DOMAINS)
 py_games = read_game_map(PY_DOMAINS)
 
@@ -280,34 +302,48 @@ if py_games.get("memory") and py_games.get("memory") == py_games.get("name-recal
 
 # ── 4. The Sprint 3 tripwire ────────────────────────────────────────────────
 #
-# CONTENT_MAX_LEVEL only exists because the level banks are still fixed arrays.
-# difficultyFor(level) is the Sprint 3 deliverable that replaces them; once it
-# exists every level 0-15 is servable and the ceiling is wrong, not just
-# redundant. Left in place it caps the new scale at 5, and a patient pinned at
-# a ceiling reads exactly like a patient who stopped improving -- a silent
-# failure in the one number this whole app produces.
+# CONTENT_MAX_LEVEL exists only because the LEGACY level banks are fixed arrays
+# that cannot serve a level they have no entry for. It is keyed by game type.
 #
-# So: the two may not coexist. Deleting the table is what turns this check off.
+# This check originally fired the moment difficultyFor() appeared anywhere,
+# on the assumption that the generator and the ceiling could not coexist. That
+# was too blunt, and it fired for the wrong reason: the generator arrived while
+# the legacy games were still playable, and the six NEW game types are absent
+# from the table, so contentMaxLevel() already returns MAX_LEVEL for every one
+# of them. Nothing new was being capped.
+#
+# So it now guards the hazard itself rather than a proxy for it:
+#
+#   a) a NEW game type appearing in the table -- generated content serves every
+#      level on demand, so a ceiling on one can only ever silently cap the
+#      0-15 scale, and a patient pinned at a ceiling reads exactly like a
+#      patient who stopped improving;
+#   b) the table outliving the legacy games it describes -- once those are
+#      gone in Sprint 4 it is dead weight that will cap something by accident.
 
-GENERATOR = re.compile(r"\b(?:difficultyFor|difficulty_for)\s*\(")
-generator_sites = []
+target_games = read_target_games(PY_DOMAINS)
+legacy_games = read_legacy_games(PY_DOMAINS)
 
-for path in source_files():
-    if path.name == "check_level_parity.py":
-        continue
-    code = strip_comments(path.read_text(encoding="utf-8"), path.suffix)
-    for lineno, line in enumerate(code, 1):
-        if GENERATOR.search(line):
-            generator_sites.append(f"{path.relative_to(ROOT).as_posix()}:{lineno}")
-
-if generator_sites and py_ceilings:
+capped_new = sorted(set(py_ceilings) & set(target_games))
+if capped_new:
     failures.append(
-        "Sprint 3 has landed (difficultyFor exists at "
-        + ", ".join(generator_sites[:3])
-        + ") but CONTENT_MAX_LEVEL is still defined. Delete the table from "
-        "shared/levels.js and backend/app/levels.py, and let stepBounded clamp "
-        "to MAX_LEVEL alone -- otherwise the 0-15 scale is silently capped at "
-        f"{max(py_ceilings.values())}."
+        f"CONTENT_MAX_LEVEL caps new game types {capped_new}. Generated content "
+        "serves every level, so a ceiling here can only silently cap the 0-15 "
+        "scale. Remove those keys."
+    )
+
+orphaned = sorted(set(py_ceilings) - set(legacy_games))
+if orphaned:
+    failures.append(
+        f"CONTENT_MAX_LEVEL has keys for games that are not in GAME_TYPES "
+        f"{orphaned} -- a ceiling nothing plays against."
+    )
+
+if py_ceilings and not set(py_ceilings) & set(legacy_games):
+    failures.append(
+        "CONTENT_MAX_LEVEL has outlived the legacy games. Delete the table from "
+        "shared/levels.js and backend/app/levels.py and let stepBounded clamp "
+        "to MAX_LEVEL alone."
     )
 
 
