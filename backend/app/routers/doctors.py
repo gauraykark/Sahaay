@@ -133,7 +133,11 @@ def clinical_view(
             trend, domains, adherence_pct, risk
         ),
         "routine_steps": [f"{r.scheduled_time} · {r.title}" for r in routine],
-        "people_count": 0,  # Vault people are device-local until vault sync lands
+        # null, not 0. Memory Vault people live only in the caregiver device's
+        # IndexedDB (Dexie table `vaultPeople`) — there is no server table and
+        # no sync endpoint, so the server cannot know the count. Reporting 0
+        # would assert an empty vault we have no basis to claim.
+        "people_count": None,
         "latest_report": json.loads(latest_report.content_json) if latest_report else None,
     }
 

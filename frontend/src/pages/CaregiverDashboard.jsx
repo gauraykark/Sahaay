@@ -19,6 +19,7 @@ import {
   listVaultRoutineSteps,
   addVaultRoutineStep,
   deleteVaultRoutineStep,
+  setPreviewMode,
 } from "../lib/db";
 import { formatRelativeDay, describeSession } from "../lib/utils";
 import { SourceBadge } from "../components/ui/Badge";
@@ -350,8 +351,9 @@ function CaregiverDashboardContent() {
             <CaregiverTool
               icon={<House size={20} />}
               title="Patient home"
-              detail="Preview how games look for the patient"
+              detail="Preview how games look — nothing you play here is recorded"
               to="/patient"
+              onClick={() => setPreviewMode(true)}
             />
             <CaregiverTool
               icon={<Heart size={20} />}
@@ -441,7 +443,7 @@ function CaregiverTool({ icon, title, detail, to, onClick }) {
 
   if (to) {
     return (
-      <Link to={to} className={className}>
+      <Link to={to} className={className} onClick={onClick}>
         {inner}
       </Link>
     );

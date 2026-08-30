@@ -25,6 +25,7 @@ import {
   ensureDemoPatient,
   listPatients,
   setActivePatientId,
+  setPreviewMode,
 } from "../lib/db";
 
 export default function Login() {
@@ -46,12 +47,17 @@ export default function Login() {
     });
   }, []);
 
+  // Entering through the patient door is real use, never a preview — clear
+  // the flag so a caregiver's earlier preview can't silence the patient's
+  // own sessions.
   const handleSelectPatient = async (patientId) => {
+    setPreviewMode(false);
     await setActivePatientId(patientId);
     navigate("/patient");
   };
 
   const handleDemoMode = async () => {
+    setPreviewMode(false);
     const demoId = await ensureDemoPatient();
     await setActivePatientId(demoId);
     navigate("/patient");

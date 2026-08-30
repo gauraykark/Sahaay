@@ -114,7 +114,7 @@ export default function PatientCard({ patient, onOpen }) {
             text-neutral-700 transition-colors
             focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
         >
-          View clinical view
+          Clinical view
           <ArrowRight size={15} />
         </button>
       </div>

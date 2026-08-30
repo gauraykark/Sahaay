@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..domains import GAME_LABELS, GAME_TYPES, domain_for_game
-from ..models import DifficultyHistory, GameSession, Patient
+from ..models import GameSession, Patient
 from . import analytics
 
 # Level bounds per game, matching the frontend's GAME_LEVEL_META.
@@ -76,8 +76,9 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
     """Cognitive Coach chain.
 
     Reads the last `lookback` sessions per game server-side, calls the LLM,
-    clamps every returned level, writes DifficultyHistory rows, and returns
-    the same shape as _rule_difficulty_plan with source="ai".
+    clamps every returned level, and returns the same shape as
+    _rule_difficulty_plan with source="ai". Writes nothing: a plan is a
+    prediction, and only a played round changes the record.
     """
     from pydantic import BaseModel, Field
     from langchain_core.output_parsers import PydanticOutputParser
@@ -184,24 +185,11 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
         ok_lvl   = clamp(game_out.level_if_ok,   gt, current)
         poor_lvl = clamp(game_out.level_if_poor,  gt, current)
 
-        # Write DifficultyHistory rows for any change
-        for branch_level, branch_reason in [
-            (good_lvl,  game_out.reason_if_good),
-            (ok_lvl,   game_out.reason_if_ok),
-            (poor_lvl, game_out.reason_if_poor),
-        ]:
-            if branch_level != current:
-                history_row = DifficultyHistory(
-                    patient_id=patient.id,
-                    game_type=gt,
-                    domain=domain_for_game(gt),
-                    from_level=current,
-                    to_level=branch_level,
-                    reason=branch_reason,
-                    source="ai",
-                    created_at=_now(),
-                )
-                db.add(history_row)
+        # No DifficultyHistory written here. These three levels are branches
+        # for a round that has not been played yet — recording them would put
+        # changes that never happened in the doctor's timeline, and double-
+        # count the one that does. /sessions/sync writes the real change once
+        # the round is actually finished.
 
         plans.append({
             "game_type": gt,
@@ -210,8 +198,6 @@ def _llm_difficulty_plan(db: Session, patient: Patient, lookback: int) -> dict:
             "if_ok":    {"level": ok_lvl,    "reason": game_out.reason_if_ok},
             "if_poor":  {"level": poor_lvl,  "reason": game_out.reason_if_poor},
         })
-
-    db.commit()
 
     # Ensure all four game types are represented
     covered = {p["game_type"] for p in plans}
@@ -323,14 +309,13 @@ def _llm_report(
 ) -> dict:
     """Report Generator chain.
 
-    Assembles the same data as _rule_report, runs the LLM chain, persists to
-    ai_reports, and returns the same four-section shape with source="ai".
+    Assembles the same data as _rule_report, runs the LLM chain, and returns
+    the same four-section shape with source="ai". The caller persists it.
     """
     from pydantic import BaseModel
     from langchain_core.output_parsers import PydanticOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    from ..models import AIReport
     from .prompts import REPORT_SYSTEM, REPORT_HUMAN
 
     llm = get_llm()
@@ -365,11 +350,9 @@ def _llm_report(
         domain_lines.append(f"  {d['label']}: {score_str}, trend={d['trend']}, sessions={d['sessions']}")
 
     from ..models import DifficultyHistory as DH
-    import json as _json
     difficulty_rows = (
         db.query(DH)
         .filter(DH.patient_id == patient.id)
-        .filter(DH.created_at >= _now().replace(hour=0, minute=0, second=0) if False else DH.created_at)
         .order_by(DH.created_at.desc())
         .limit(20)
         .all()
@@ -401,25 +384,9 @@ def _llm_report(
 
     now = _now()
 
-    # ── Persist to ai_reports ─────────────────────────────────────────────────
-    content = {
-        "summary": result.summary,
-        "trends": result.trends,
-        "observations": result.observations,
-        "suggestions": result.suggestions,
-    }
-    import json as _json2
-    report_row = AIReport(
-        patient_id=patient.id,
-        audience=audience,
-        period_days=period_days,
-        language=language,
-        content_json=_json2.dumps(content),
-        source="ai",
-        created_at=now,
-    )
-    db.add(report_row)
-    db.commit()
+    # Not persisted here — the /ai/generate-report route writes the row for
+    # both the AI and rule paths. Saving it in both places produced two
+    # ai_reports rows per request.
 
     return {
         "patient_id": patient.id,
@@ -474,7 +441,10 @@ def _rule_report(
         observations.append(f"Weakest area: {worst['label']} at {worst['score']}%.")
     if adherence_pct is not None:
         observations.append(f"Reminder adherence: {adherence_pct}%.")
-    untouched = [d["label"] for d in scored if d["sessions"] == 0]
+    # Iterate every domain, not just the scored ones: a domain with sessions
+    # always has a score, so filtering `scored` for sessions == 0 could never
+    # match and this line never appeared.
+    untouched = [d["label"] for d in domains if d["sessions"] == 0]
     if untouched:
         observations.append(f"Not attempted this period: {', '.join(untouched)}.")
 

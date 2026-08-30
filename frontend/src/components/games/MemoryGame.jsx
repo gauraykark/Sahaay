@@ -75,17 +75,24 @@ export default function MemoryGame() {
       const { newLevel, reason, source } = await resolveNextLevel({
         gameType: GAME_TYPE,
         currentLevel: level,
+        // No score/total here on purpose: memory is judged on move
+        // efficiency, and passing a score would only invite the accuracy
+        // branch back in.
         stats: {
           completed: true,
           moves,
           idealMoves: pairCount,
           errors,
           durationMs,
-          score: pairCount,
-          total: pairCount,
         },
       });
 
+      // score/total is what the doctor's analytics reads as accuracy, so it
+      // has to carry a real signal. pairCount is the fewest moves the board
+      // can be cleared in, making pairCount/moves a move-efficiency rate:
+      // 100% for flawless play, ~62% at the "good" cutoff, ~36% at "poor".
+      // Logging pairCount/pairCount instead made every memory round 100% and
+      // the Memory domain a measure of participation, not performance.
       await logGameSession({
         gameType: GAME_TYPE,
         completed: true,
@@ -96,7 +103,7 @@ export default function MemoryGame() {
         durationMs,
         reason,
         score: pairCount,
-        total: pairCount,
+        total: moves || pairCount,
       });
 
       setNextHint(reason);

@@ -59,6 +59,55 @@ REMINDERS = [
     ("medicine",  "Evening tablet",   "20:00"),
 ]
 
+# ── The doctor's real caseload ────────────────────────────────────────────────
+# These are is_demo=False, so they are the patients doctor@sahaay.in sees on a
+# plain visit to the dashboard. The twelve above stay behind ?include_demo=true.
+#
+# The spread is deliberate: the priority strip, both AI Assistant panels, and
+# all four filter chips are driven off trend/risk/offline, so the caseload has
+# to contain a patient of each shape or those surfaces render empty and read as
+# unbuilt.
+#
+# name, age, stage, profile, adherence, caregiver name, caregiver email
+REAL_PEOPLE = [
+    ("Joymoti Gogoi",  74, "Mild", "sharp-drop", 0.52, "Bhaskar Gogoi",  "bhaskar@sahaay.in"),
+    ("Ratan Chakma",   79, "Mild", "declining",  0.71, "Mitali Chakma",  "mitali@sahaay.in"),
+    ("Sushila Tamang", 70, "MCI",  "improving",  0.91, "Dawa Tamang",    "dawa@sahaay.in"),
+    ("Alemla Jamir",   73, "MCI",  "improving",  0.86, "Along Jamir",    "along@sahaay.in"),
+    ("Nripen Saikia",  76, "Mild", "stable",     0.83, "Rupam Saikia",   "rupam@sahaay.in"),
+    ("Phulmoni Rabha", 81, "Mild", "stable",     0.78, "Dhaniram Rabha", "dhaniram@sahaay.in"),
+]
+
+REAL_DAYS = 30
+# Phulmoni's device stopped syncing — she is what the "High offline usage"
+# chip and the offline badge exist to show.
+OFFLINE_PATIENT = "Phulmoni Rabha"
+OFFLINE_SINCE_DAYS = 5
+
+
+def _real_accuracy_for(profile: str, day_index: int, total_days: int) -> float:
+    """Accuracy for a real-caseload patient on a given day."""
+    progress = day_index / max(1, total_days)
+
+    if profile == "improving":
+        base = 0.50 + 0.32 * progress
+        jitter = 0.06
+    elif profile == "declining":
+        base = 0.78 - 0.26 * progress
+        jitter = 0.06
+    elif profile == "sharp-drop":
+        base = 0.80 - 0.22 * progress
+        jitter = 0.06
+    else:
+        # A dead-flat line plus rounding noise reads as "declining" often
+        # enough to empty the Stable chip. A whisper of upward drift — far
+        # inside analytics.TREND_BAND, so still classified stable — keeps it
+        # on the right side of the boundary.
+        base = 0.68 + 0.02 * progress
+        jitter = 0.04
+
+    return max(0.12, min(0.98, base + random.uniform(-jitter, jitter)))
+
 
 def _now():
     return datetime.now(timezone.utc)
@@ -76,6 +125,186 @@ def _accuracy_for(profile: str, day_index: int, total_days: int) -> float:
         base = 0.68
 
     return max(0.12, min(0.98, base + random.uniform(-0.09, 0.09)))
+
+
+def seed_real_caseload(db, doctor) -> None:
+    """Six real (non-demo) patients on the doctor's caseload.
+
+    Session history is generated, not observed — same caveat as the demo
+    twelve. It exists so the analytics surfaces have something truthful to
+    compute over, not to stand in for evidence.
+    """
+    now = _now()
+    start = now - timedelta(days=REAL_DAYS)
+
+    for name, age, stage, profile, adherence_rate, cg_name, cg_email in REAL_PEOPLE:
+        caregiver = User(
+            name=cg_name,
+            email=cg_email,
+            role=ROLE_CAREGIVER,
+            hashed_password=hash_password(PASSWORD),
+            preferred_language="en",
+        )
+        db.add(caregiver)
+        db.flush()
+
+        is_offline = name == OFFLINE_PATIENT
+        last_sync = now - timedelta(days=OFFLINE_SINCE_DAYS) if is_offline else now - timedelta(hours=2)
+
+        patient = Patient(
+            name=name,
+            age=age,
+            diagnosis_stage=stage,
+            caregiver_id=caregiver.id,
+            doctor_id=doctor.id,
+            preferred_language="en",
+            last_sync_at=last_sync,
+            created_at=start,
+            is_demo=False,
+        )
+        db.add(patient)
+        db.flush()
+
+        levels = {game: random.randint(1, 2) for game in GAME_TYPES}
+
+        for day in range(REAL_DAYS):
+            # Gaps are intentional: the 30-day trend graph draws a dashed span
+            # across days with no sessions, which needs days with no sessions.
+            if random.random() < 0.30:
+                continue
+            if is_offline and day > REAL_DAYS - OFFLINE_SINCE_DAYS:
+                continue
+
+            when = start + timedelta(days=day, hours=random.randint(8, 19))
+
+            for game in random.sample(GAME_TYPES, random.randint(1, 3)):
+                accuracy = _real_accuracy_for(profile, day, REAL_DAYS)
+                total = random.choice([4, 5, 6])
+                score = round(accuracy * total)
+                level = levels[game]
+
+                new_level = level
+                if accuracy > 0.8 and level < 4:
+                    new_level = level + 1
+                elif accuracy < 0.45 and level > 1:
+                    new_level = level - 1
+
+                db.add(
+                    GameSession(
+                        patient_id=patient.id,
+                        dexie_id=None,
+                        game_type=game,
+                        domain=domain_for_game(game),
+                        score=score,
+                        total=total,
+                        moves=random.randint(6, 22) if game == "memory" else None,
+                        errors=total - score,
+                        level=level,
+                        new_level=new_level,
+                        duration_ms=random.randint(38_000, 155_000),
+                        completed=random.random() > 0.07,
+                        created_at=when,
+                    )
+                )
+
+                if new_level != level:
+                    db.add(
+                        DifficultyHistory(
+                            patient_id=patient.id,
+                            game_type=game,
+                            domain=domain_for_game(game),
+                            from_level=level,
+                            to_level=new_level,
+                            reason=(
+                                "Accuracy stayed high across recent rounds."
+                                if new_level > level
+                                else "Recent rounds were harder going than usual."
+                            ),
+                            source="rule",
+                            created_at=when,
+                        )
+                    )
+                    levels[game] = new_level
+
+        # One sharply bad round, most recent of all, so the z-score against
+        # this patient's own baseline trips the "Sudden drop" panel.
+        if profile == "sharp-drop":
+            crash_from = levels["memory"]
+            crash_to = max(1, crash_from - 1)
+            db.add(
+                GameSession(
+                    patient_id=patient.id,
+                    dexie_id=None,
+                    game_type="memory",
+                    domain=domain_for_game("memory"),
+                    score=1,
+                    total=6,
+                    moves=26,
+                    errors=5,
+                    level=crash_from,
+                    new_level=crash_to,
+                    duration_ms=182_000,
+                    completed=True,
+                    created_at=now - timedelta(hours=2),
+                )
+            )
+            # Only when the level actually moved. At the floor there is no
+            # change to record, and a "level 1 → 1" row in the doctor's
+            # timeline is a change that did not happen.
+            if crash_to != crash_from:
+                db.add(
+                    DifficultyHistory(
+                        patient_id=patient.id,
+                        game_type="memory",
+                        domain=domain_for_game("memory"),
+                        from_level=crash_from,
+                        to_level=crash_to,
+                        reason="We'll take it a little gentler next time.",
+                        source="ai",
+                        created_at=now - timedelta(hours=2),
+                    )
+                )
+
+        # Adherence is placed, not rolled. Coin flips over 56 slots drift far
+        # enough that a patient seeded at 52% reported 82% — and the card's
+        # number is the whole point of the patient. Spreading the "done" slots
+        # evenly makes the displayed percentage match the intended one in both
+        # the 7-day and 14-day windows.
+        slots = [(d, r) for d in range(14) for r in range(len(REMINDERS))]
+        done_map = {}
+        acc = 0.0
+        for slot in slots:
+            acc += adherence_rate
+            if acc >= 1.0:
+                done_map[slot] = True
+                acc -= 1.0
+            else:
+                done_map[slot] = False
+
+        for reminder_index, (reminder_type, title, at) in enumerate(REMINDERS):
+            reminder = Reminder(
+                caregiver_id=caregiver.id,
+                patient_id=patient.id,
+                reminder_type=reminder_type,
+                title=title,
+                scheduled_time=at,
+                days_of_week="daily",
+            )
+            db.add(reminder)
+            db.flush()
+
+            for day_back in range(14):
+                due = now - timedelta(days=day_back)
+                done = done_map[(day_back, reminder_index)]
+                db.add(
+                    ReminderLog(
+                        reminder_id=reminder.id,
+                        patient_id=patient.id,
+                        due_at=due,
+                        acted_at=due + timedelta(minutes=random.randint(2, 45)) if done else None,
+                        status="done" if done else "missed",
+                    )
+                )
 
 
 def seed() -> None:
@@ -224,16 +453,25 @@ def seed() -> None:
                         )
                     )
 
+        seed_real_caseload(db, doctor)
+
         db.commit()
 
-        print(f"Seeded 1 doctor, {len(PEOPLE)} caregivers, {len(PEOPLE)} patients.")
+        real_count = db.query(Patient).filter(Patient.is_demo.is_(False)).count()
+        demo_count = db.query(Patient).filter(Patient.is_demo.is_(True)).count()
+
+        print(f"Seeded 1 doctor, {demo_count} demo patients, {real_count} real patients.")
         print(f"  sessions:  {db.query(GameSession).count()}")
         print(f"  reminders: {db.query(Reminder).count()}")
         print(f"  logs:      {db.query(ReminderLog).count()}")
         print()
         print("Login:")
-        print(f"  doctor     doctor@sahaay.in     / {PASSWORD}")
-        print(f"  caregiver  caregiver1@sahaay.in / {PASSWORD}")
+        print(f"  doctor          doctor@sahaay.in      / {PASSWORD}")
+        print(f"  demo caregiver  caregiver1@sahaay.in  / {PASSWORD}   (…through caregiver12@)")
+        print()
+        print(f"Real caseload — the {real_count} patients the doctor sees by default:")
+        for name, _age, _stage, profile, _adh, cg_name, cg_email in REAL_PEOPLE:
+            print(f"  {name:<16} {profile:<11} {cg_name:<16} {cg_email:<22} / {PASSWORD}")
 
     finally:
         db.close()

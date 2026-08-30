@@ -76,6 +76,11 @@ export default function RoutineGame() {
       setIsComplete(true);
       const durationMs = Date.now() - startedAt.current;
       const currentErrors = errors;
+      // The round can only finish in a correct order — a wrong tap resets the
+      // sequence — so stepCount/stepCount would score every round 100% no
+      // matter how many attempts it took. Charging each wrong tap against the
+      // score is what makes "ok" and "poor" reachable here at all.
+      const effectiveScore = Math.max(0, routine.stepCount - currentErrors);
       (async () => {
         const { newLevel, reason, source } = await resolveNextLevel({
           gameType: GAME_TYPE,
@@ -85,13 +90,13 @@ export default function RoutineGame() {
             errors: currentErrors,
             total: routine.stepCount,
             durationMs,
-            score: routine.stepCount,
+            score: effectiveScore,
           },
         });
         await logGameSession({
           gameType: GAME_TYPE,
           completed: true,
-          score: routine.stepCount,
+          score: effectiveScore,
           total: routine.stepCount,
           errors: currentErrors,
           level,

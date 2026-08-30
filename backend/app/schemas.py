@@ -300,7 +300,9 @@ class ClinicalViewOut(BaseModel):
     notes: list[ClinicalNoteOut]
     recommended_actions: list[str]
     routine_steps: list[str]
-    people_count: int
+    # None = the server has no visibility into the device-local Memory Vault,
+    # which is different from "the vault is empty".
+    people_count: int | None
     latest_report: dict | None
 
 

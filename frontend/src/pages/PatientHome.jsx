@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { speak } from "../lib/utils";
-import { listVaultRoutineSteps } from "../lib/db";
+import { isPreviewMode, listVaultRoutineSteps, setPreviewMode } from "../lib/db";
 import { useAuth } from "../lib/auth";
 import { useT, langToLocale } from "../lib/i18n";
 import {
@@ -13,6 +13,8 @@ import {
   Heart,
   Sun,
 } from "@phosphor-icons/react";
+
+const GREETED_KEY = "sahaay-greeted";
 
 export default function PatientHome() {
   const { user } = useAuth();
@@ -28,10 +30,17 @@ export default function PatientHome() {
 
   const [routineSteps, setRoutineSteps] = useState([]);
   const [isRoutineLoading, setIsRoutineLoading] = useState(true);
+  const [preview, setPreview] = useState(() => isPreviewMode());
 
-  // Soft voice greeting (only once when page loads)
+  // Soft voice greeting — once per browser session, not once per mount.
+  // Returning to this screen between games remounts it, and re-greeting every
+  // time talks over whoever is mid-sentence. sessionStorage (not IndexedDB)
+  // so a genuinely new visit is greeted again.
   useEffect(() => {
+    if (sessionStorage.getItem(GREETED_KEY) === "true") return;
+
     const timer = setTimeout(() => {
+      sessionStorage.setItem(GREETED_KEY, "true");
       speak(t("speak_greeting", greeting), { lang: locale });
     }, 600);
 
@@ -68,6 +77,26 @@ export default function PatientHome() {
           </Link>
         </div>
       </header>
+
+      {preview && (
+        <div className="mx-5 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900">
+            <span className="font-medium">Caregiver preview.</span> Games are
+            fully playable, but nothing is saved to this patient's record.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setPreviewMode(false);
+              setPreview(false);
+            }}
+            className="text-sm font-medium text-amber-900 underline underline-offset-2
+              focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+          >
+            Hand over to the patient
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="px-5 pb-10">

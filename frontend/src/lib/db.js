@@ -87,6 +87,33 @@ db.version(3).stores({
 const ACTIVE_PATIENT_KEY = "activePatientId";
 const DEMO_PATIENT_NAME = "Demo";
 
+// ---------------------------------------------------------------------
+// Caregiver preview mode
+// ---------------------------------------------------------------------
+//
+// The caregiver dashboard links to the patient's own home screen so the
+// caregiver can see what the patient sees. That screen is fully playable,
+// and the active patient at that moment is a REAL patient — so without a
+// guard, a caregiver trying out a game writes a real session, syncs it, and
+// it lands in the doctor's trend graph as the patient's performance.
+//
+// While this flag is set, rounds are played but nothing is written: no
+// session row, no difficulty change, no sync. sessionStorage, so it dies
+// with the tab and can never strand a real patient in a silent no-log state.
+
+const PREVIEW_MODE_KEY = "sahaay-preview-mode";
+
+export function isPreviewMode() {
+  if (typeof sessionStorage === "undefined") return false;
+  return sessionStorage.getItem(PREVIEW_MODE_KEY) === "true";
+}
+
+export function setPreviewMode(on) {
+  if (typeof sessionStorage === "undefined") return;
+  if (on) sessionStorage.setItem(PREVIEW_MODE_KEY, "true");
+  else sessionStorage.removeItem(PREVIEW_MODE_KEY);
+}
+
 // Calm, in-palette colors (drawn from the same teal/neutral system as the
 // rest of the app) used as automatic avatar backgrounds when a patient has
 // no photo. Cycled by id so colors stay stable and distinct per profile.
@@ -209,6 +236,10 @@ export async function logGameSession({
   durationMs = null,
   reason = null,
 } = {}) {
+  // A caregiver previewing the patient's screen must not write to that
+  // patient's clinical record. Nothing is stored and nothing syncs.
+  if (isPreviewMode()) return null;
+
   const patientId = await getActivePatientId();
 
   const id = await db.gameSessions.add({

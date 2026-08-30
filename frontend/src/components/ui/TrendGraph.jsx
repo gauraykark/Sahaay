@@ -4,30 +4,36 @@
 // connection; Recharts or Chart.js would add a few hundred KB to serve one
 // line. An SVG path costs nothing and renders identically offline.
 //
-// Days with no sessions stay null and BREAK the line rather than interpolating
-// across the gap. On a clinical screen a continuous line implies continuous
-// data, and inventing that would be a small lie in the one place it matters.
+// Days with no sessions are still not invented — but the line is no longer
+// broken into free-floating islands either, which read as a rendering fault
+// rather than as missing data. Measured days are joined by a solid line;
+// spans crossing days with no session are joined by a DASHED line. The shape
+// of the trend stays readable, and the dash says plainly that nothing was
+// measured in between.
 
 const WIDTH = 720;
 const HEIGHT = 180;
 const PAD = { top: 12, right: 8, bottom: 22, left: 30 };
 
-function buildSegments(points) {
-  // Split into runs of consecutive non-null days.
-  const segments = [];
-  let current = [];
+/** The measured days only, each carrying its index in the full series. */
+function measuredPoints(points) {
+  return points
+    .map((point, index) => ({ ...point, index }))
+    .filter((point) => point.score !== null && point.score !== undefined);
+}
 
-  points.forEach((point, index) => {
-    if (point.score === null || point.score === undefined) {
-      if (current.length) segments.push(current);
-      current = [];
-    } else {
-      current.push({ ...point, index });
-    }
-  });
-  if (current.length) segments.push(current);
-
-  return segments;
+/**
+ * One link per adjacent pair of measured days. `gap` is true when the two
+ * days are not consecutive, i.e. the line is spanning unmeasured time.
+ */
+function buildLinks(measured) {
+  const links = [];
+  for (let i = 1; i < measured.length; i += 1) {
+    const from = measured[i - 1];
+    const to = measured[i];
+    links.push({ from, to, gap: to.index - from.index > 1 });
+  }
+  return links;
 }
 
 export default function TrendGraph({ data = [] }) {
@@ -45,9 +51,20 @@ export default function TrendGraph({ data = [] }) {
   const x = (index) => PAD.left + (index / Math.max(1, data.length - 1)) * plotWidth;
   const y = (score) => PAD.top + (1 - score / 100) * plotHeight;
 
-  const segments = buildSegments(data);
-  const withData = data.filter((d) => d.score !== null);
-  const last = withData[withData.length - 1];
+  const measured = measuredPoints(data);
+  const links = buildLinks(measured);
+  const last = measured[measured.length - 1];
+
+  // One area under the whole measured run, so the fill doesn't fragment.
+  const areaPath = measured.length
+    ? `M ${x(measured[0].index)} ${y(measured[0].score)} ` +
+      measured
+        .slice(1)
+        .map((p) => `L ${x(p.index)} ${y(p.score)}`)
+        .join(" ") +
+      ` L ${x(measured[measured.length - 1].index)} ${y(0)}` +
+      ` L ${x(measured[0].index)} ${y(0)} Z`
+    : null;
 
   return (
     <div className="overflow-x-auto">
@@ -80,48 +97,40 @@ export default function TrendGraph({ data = [] }) {
           </g>
         ))}
 
-        {/* Area fill under each run, then the line on top */}
-        {segments.map((segment, index) => {
-          if (segment.length < 2) return null;
-          const line = segment
-            .map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.index)} ${y(p.score)}`)
-            .join(" ");
-          const area =
-            `${line} L ${x(segment[segment.length - 1].index)} ${y(0)} ` +
-            `L ${x(segment[0].index)} ${y(0)} Z`;
+        {/* One continuous area under the measured run */}
+        {areaPath && <path d={areaPath} fill="#247a72" fillOpacity="0.07" />}
 
-          return (
-            <g key={index}>
-              <path d={area} fill="#247a72" fillOpacity="0.07" />
-              <path
-                d={line}
-                fill="none"
-                stroke="#247a72"
-                strokeWidth="2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            </g>
-          );
-        })}
+        {/* Solid between consecutive days, dashed across unmeasured spans */}
+        {links.map((link) => (
+          <line
+            key={`${link.from.index}-${link.to.index}`}
+            x1={x(link.from.index)}
+            y1={y(link.from.score)}
+            x2={x(link.to.index)}
+            y2={y(link.to.score)}
+            stroke="#247a72"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray={link.gap ? "4 4" : undefined}
+            strokeOpacity={link.gap ? 0.55 : 1}
+          />
+        ))}
 
-        {/* Single-day runs would otherwise be invisible */}
-        {segments
-          .filter((segment) => segment.length === 1)
-          .map((segment) => (
-            <circle
-              key={segment[0].index}
-              cx={x(segment[0].index)}
-              cy={y(segment[0].score)}
-              r="3"
-              fill="#247a72"
-            />
-          ))}
+        {/* Every measured day gets a dot, so single days are never invisible */}
+        {measured.map((point) => (
+          <circle
+            key={point.index}
+            cx={x(point.index)}
+            cy={y(point.score)}
+            r="2.5"
+            fill="#247a72"
+          />
+        ))}
 
         {/* Emphasise where the patient is now */}
         {last ? (
           <circle
-            cx={x(data.indexOf(last))}
+            cx={x(last.index)}
             cy={y(last.score)}
             r="4"
             fill="#247a72"

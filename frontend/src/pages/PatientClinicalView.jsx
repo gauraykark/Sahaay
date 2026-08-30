@@ -273,7 +273,8 @@ export default function PatientClinicalView() {
           <SectionHeading icon={ChartLine}>Last 30 days</SectionHeading>
           <TrendGraph data={trend_30d} />
           <p className="text-xs text-neutral-400 mt-2">
-            Days with no sessions are left blank rather than joined up.
+            Each dot is a day with sessions. A dashed line spans days with no
+            sessions — no score was measured across it.
           </p>
         </SectionCard>
 
