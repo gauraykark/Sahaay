@@ -1,0 +1,65 @@
+{
+  "_README": [
+    "The asset vocabulary Sprint 3's item bank will be built against.",
+    "",
+    "EDIT THIS FILE, not the script. It is the contract: normalise_item_images.py",
+    "renames files to match these keys, and the manifest reports present vs",
+    "expected against them. Nothing in the item bank should hardcode a filename",
+    "until the manifest reports zero gaps and zero unmapped files.",
+    "",
+    "The object list was seeded from the 20 images supplied, with one spelling",
+    "corrected (cocnut -> coconut). If a key here is wrong, fix it here and",
+    "re-run; do not rename a file by hand.",
+    "",
+    "Faces are a grid: every person x every emotion. 2 x 6 = 12."
+  ],
+
+  "objects": [
+    "banana",
+    "basket",
+    "bicycle",
+    "bucket",
+    "clock",
+    "coconut",
+    "comb",
+    "cow",
+    "fish",
+    "jackfruit",
+    "kettle",
+    "lamp",
+    "plate",
+    "pot",
+    "rice",
+    "slippers",
+    "soap",
+    "spoon",
+    "teacup",
+    "umbrella"
+  ],
+
+  "faces": {
+    "people": ["man", "woman"],
+    "emotions": ["angry", "calm", "happy", "sad", "surprised", "worried"]
+  },
+
+  "aliases": {
+    "_README": [
+      "DECLARED corrections, not guesses. A source filename token listed here is",
+      "mapped to its canonical key and reported as a correction in the run log.",
+      "Anything not resolvable directly or through this table is printed as",
+      "UNMAPPED and left alone -- the script never infers a key from context,",
+      "even when only one slot is empty."
+    ],
+    "objects": {
+      "cocnut": "coconut"
+    },
+    "emotions": {
+      "clam": "calm",
+      "suppried": "surprised",
+      "suprised": "surprised",
+      "surprized": "surprised",
+      "worryed": "worried"
+    },
+    "people": {}
+  }
+}

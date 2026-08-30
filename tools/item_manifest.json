@@ -1,0 +1,254 @@
+{
+  "max_edge_px": 800,
+  "jpeg_quality": 82,
+  "sets": {
+    "objects": {
+      "expected": [
+        "banana",
+        "basket",
+        "bicycle",
+        "bucket",
+        "clock",
+        "coconut",
+        "comb",
+        "cow",
+        "fish",
+        "jackfruit",
+        "kettle",
+        "lamp",
+        "plate",
+        "pot",
+        "rice",
+        "slippers",
+        "soap",
+        "spoon",
+        "teacup",
+        "umbrella"
+      ],
+      "present": {
+        "banana": {
+          "file": "banana.jpg",
+          "source": "banana.jpg",
+          "width": 632,
+          "height": 400
+        },
+        "basket": {
+          "file": "basket.jpg",
+          "source": "basket.jpg",
+          "width": 617,
+          "height": 407
+        },
+        "bicycle": {
+          "file": "bicycle.jpg",
+          "source": "bicycle.jpg",
+          "width": 800,
+          "height": 545
+        },
+        "bucket": {
+          "file": "bucket.jpg",
+          "source": "bucket.jpg",
+          "width": 622,
+          "height": 607
+        },
+        "clock": {
+          "file": "clock.jpg",
+          "source": "clock.jpg",
+          "width": 800,
+          "height": 492
+        },
+        "coconut": {
+          "file": "coconut.jpg",
+          "source": "coconut.jpg",
+          "width": 432,
+          "height": 341
+        },
+        "comb": {
+          "file": "comb.jpg",
+          "source": "comb.jpg",
+          "width": 800,
+          "height": 533
+        },
+        "cow": {
+          "file": "cow.jpg",
+          "source": "cow.jpg",
+          "width": 800,
+          "height": 532
+        },
+        "fish": {
+          "file": "fish.jpg",
+          "source": "fish.jpg",
+          "width": 800,
+          "height": 533
+        },
+        "jackfruit": {
+          "file": "jackfruit.jpg",
+          "source": "jackfruit.jpg",
+          "width": 800,
+          "height": 585
+        },
+        "kettle": {
+          "file": "kettle.jpg",
+          "source": "kettle.jpg",
+          "width": 533,
+          "height": 800
+        },
+        "lamp": {
+          "file": "lamp.jpg",
+          "source": "lamp.jpg",
+          "width": 515,
+          "height": 345
+        },
+        "plate": {
+          "file": "plate.jpg",
+          "source": "plate.jpg",
+          "width": 800,
+          "height": 526
+        },
+        "pot": {
+          "file": "pot.jpg",
+          "source": "pot.jpg",
+          "width": 575,
+          "height": 417
+        },
+        "rice": {
+          "file": "rice.jpg",
+          "source": "rice.jpg",
+          "width": 800,
+          "height": 533
+        },
+        "slippers": {
+          "file": "slippers.jpg",
+          "source": "slippers.jpg",
+          "width": 352,
+          "height": 367
+        },
+        "soap": {
+          "file": "soap.jpg",
+          "source": "soap.jpg",
+          "width": 572,
+          "height": 372
+        },
+        "spoon": {
+          "file": "spoon.jpg",
+          "source": "spoon.jpg",
+          "width": 800,
+          "height": 531
+        },
+        "teacup": {
+          "file": "teacup.jpg",
+          "source": "teacup.jpg",
+          "width": 517,
+          "height": 367
+        },
+        "umbrella": {
+          "file": "umbrella.jpg",
+          "source": "umbrella.jpg",
+          "width": 430,
+          "height": 307
+        }
+      },
+      "missing": [],
+      "extra": [],
+      "unmapped": [],
+      "collisions": [],
+      "complete": true
+    },
+    "faces": {
+      "expected": [
+        "man-angry",
+        "man-calm",
+        "man-happy",
+        "man-sad",
+        "man-surprised",
+        "man-worried",
+        "woman-angry",
+        "woman-calm",
+        "woman-happy",
+        "woman-sad",
+        "woman-surprised",
+        "woman-worried"
+      ],
+      "present": {
+        "man-calm": {
+          "file": "man-calm.jpg",
+          "source": "man-calm.jpg",
+          "width": 800,
+          "height": 551
+        },
+        "man-happy": {
+          "file": "man-happy.jpg",
+          "source": "man-happy.jpg",
+          "width": 800,
+          "height": 516
+        },
+        "man-sad": {
+          "file": "man-sad.jpg",
+          "source": "man-sad.jpg",
+          "width": 800,
+          "height": 534
+        },
+        "man-surprised": {
+          "file": "man-surprised.jpg",
+          "source": "man-surprised.jpg",
+          "width": 581,
+          "height": 440
+        },
+        "man-worried": {
+          "file": "man-worried.jpg",
+          "source": "man-worried.jpg",
+          "width": 800,
+          "height": 552
+        },
+        "woman-angry": {
+          "file": "woman-angry.jpg",
+          "source": "woman-angry.jpg",
+          "width": 800,
+          "height": 568
+        },
+        "woman-calm": {
+          "file": "woman-calm.jpg",
+          "source": "woman-calm.jpg",
+          "width": 800,
+          "height": 581
+        },
+        "woman-happy": {
+          "file": "woman-happy.jpg",
+          "source": "woman-happy.jpg",
+          "width": 800,
+          "height": 562
+        },
+        "woman-sad": {
+          "file": "woman-sad.jpg",
+          "source": "woman-sad.jpg",
+          "width": 800,
+          "height": 588
+        },
+        "woman-surprised": {
+          "file": "woman-surprised.jpg",
+          "source": "woman-surprised.jpg",
+          "width": 575,
+          "height": 402
+        },
+        "woman-worried": {
+          "file": "woman-worried.jpg",
+          "source": "woman-worried.jpg",
+          "width": 800,
+          "height": 562
+        }
+      },
+      "missing": [
+        "man-angry"
+      ],
+      "extra": [],
+      "unmapped": [
+        {
+          "file": "human angry .png",
+          "reason": "no person token; unrecognised ['human']"
+        }
+      ],
+      "collisions": [],
+      "complete": false
+    }
+  },
+  "clean": false
+}
