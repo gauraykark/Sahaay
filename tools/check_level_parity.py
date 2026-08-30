@@ -20,6 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 JS_SCALE = ROOT / "shared" / "levels.js"
 PY_SCALE = ROOT / "backend" / "app" / "levels.py"
+JS_DOMAINS = ROOT / "shared" / "domains.js"
+PY_DOMAINS = ROOT / "backend" / "app" / "domains.py"
 
 SKIP_DIRS = {"node_modules", "venv", ".git", "dist", "__pycache__", ".claude"}
 SOURCE_SUFFIXES = {".js", ".jsx", ".py"}
@@ -196,6 +198,86 @@ for path in source_files():
                 break
 
 
+# ── 3b. The six domains agree across runtimes ────────────────────────────────
+#
+# The client stores six base levels locally and sends `domain` with every
+# session row, so both sides carry the list. Two copies can drift, and a drift
+# here means a session row lands in a domain the dashboard never renders.
+
+def _resolve_ref(text: str, ref: str) -> str | None:
+    match = re.search(ref + r"""\s*=\s*["']([a-z_]+)["']""", text)
+    return match.group(1) if match else None
+
+
+def read_domain_list(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    block = re.search(r"DOMAINS\s*[:=]\s*\[(.*?)\]", text, re.S)
+    if not block:
+        raise SystemExit(f"{path.name}: could not find DOMAINS")
+    body = block.group(1)
+
+    names = re.findall(r"""["']([a-z_]+)["']""", body)
+    if names:
+        return names
+
+    # Written as constant references (DOMAIN_MEMORY, ...) -- resolve each.
+    out = []
+    for ref in re.findall(r"\b(DOMAIN_[A-Z_]+)\b", body):
+        value = _resolve_ref(text, ref)
+        if value:
+            out.append(value)
+    return out
+
+
+def read_game_map(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    block = re.search(r"GAME_TO_DOMAIN\s*[:=]\s*\{(.*?)^\}", text, re.S | re.M)
+    if not block:
+        raise SystemExit(f"{path.name}: could not find GAME_TO_DOMAIN")
+
+    out = {}
+    for line in block.group(1).splitlines():
+        match = re.match(
+            r"""\s*["']?([\w-]+)["']?\s*:\s*(?:["']([a-z_]+)["']|(DOMAIN_[A-Z_]+))""",
+            line,
+        )
+        if not match:
+            continue
+        game, literal, ref = match.groups()
+        value = literal or _resolve_ref(text, ref)
+        if value:
+            out[game] = value
+    return out
+
+
+js_domains = read_domain_list(JS_DOMAINS)
+py_domains = read_domain_list(PY_DOMAINS)
+
+if js_domains != py_domains:
+    failures.append(
+        f"DOMAINS disagree: shared/domains.js={js_domains}, domains.py={py_domains}"
+    )
+
+DSM5 = ["attention", "executive", "memory", "language", "perceptual_motor", "social"]
+if py_domains != DSM5:
+    failures.append(f"DOMAINS is {py_domains}, spec says the six DSM-5 domains {DSM5}")
+
+js_games = read_game_map(JS_DOMAINS)
+py_games = read_game_map(PY_DOMAINS)
+
+if js_games != py_games:
+    only_js = {k: v for k, v in js_games.items() if py_games.get(k) != v}
+    only_py = {k: v for k, v in py_games.items() if js_games.get(k) != v}
+    failures.append(f"GAME_TO_DOMAIN disagrees -- js has {only_js}, py has {only_py}")
+
+# The collapse this rewrite exists to undo.
+if py_games.get("memory") and py_games.get("memory") == py_games.get("name-recall"):
+    failures.append(
+        "memory and name-recall map to the same domain again -- that collapse "
+        "is what made the Memory score blend two unrelated tasks"
+    )
+
+
 # ── 4. The Sprint 3 tripwire ────────────────────────────────────────────────
 #
 # CONTENT_MAX_LEVEL only exists because the level banks are still fixed arrays.
@@ -230,7 +312,7 @@ if generator_sites and py_ceilings:
 
 
 if failures:
-    print("LEVEL PARITY: FAIL")
+    print("PARITY: FAIL")
     for line in failures:
         print(f"  - {line}")
     sys.exit(1)
@@ -241,6 +323,6 @@ ceiling_note = (
     else ", no content ceiling"
 )
 print(
-    f"LEVEL PARITY: OK  (scale {MIN_LEVEL}-{MAX_LEVEL}, one definition per "
-    f"runtime{ceiling_note})"
+    f"PARITY: OK  (scale {MIN_LEVEL}-{MAX_LEVEL}, {len(py_domains)} domains, "
+    f"one definition per runtime{ceiling_note})"
 )

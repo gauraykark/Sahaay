@@ -38,7 +38,7 @@ from app.levels import (  # noqa: E402
     step_bounded,
 )
 from app.models import GameSession, Patient, User  # noqa: E402
-from app.services import agents, analytics  # noqa: E402
+from app.services import agents, analytics, base_levels  # noqa: E402
 
 passed: list[str] = []
 failed: list[str] = []
@@ -159,15 +159,38 @@ reloaded = (
 check("session row stores level 0", reloaded.level, 0)
 check("session row stores new_level 0", reloaded.new_level, 0)
 
+# Sprint 2 moved base levels into their own store, so sessions no longer imply
+# a level. A patient with plenty of play but no calibration reads as
+# uncalibrated -- the honest answer, and a different fact from level 0.
 levels = analytics._latest_levels(db, patient.id)
-check("analytics reads memory level back as 0", levels.get("memory"), 0)
+check("sessions alone do not imply a base level", levels.get("memory"), None)
 
 all_sessions = (
     db.query(GameSession).filter(GameSession.patient_id == patient.id).all()
 )
 scores = analytics.domain_scores(db, patient.id, all_sessions)
 memory_score = next(d for d in scores if d["domain"] == "memory")
-check("domain_scores reports level 0", memory_score["level"], 0)
+check("an uncalibrated domain reports level None", memory_score["level"], None)
+
+# The Sprint 0 guarantee, now routed through the store: a base level of 0
+# stays 0 and is never read as 1 or confused with "not measured".
+base_levels.set_level(db, patient.id, "memory", 0, reason="calibration")
+db.commit()
+check(
+    "a STORED level 0 reads back as 0",
+    analytics._latest_levels(db, patient.id)["memory"],
+    0,
+)
+memory_score = next(
+    d for d in analytics.domain_scores(db, patient.id, all_sessions)
+    if d["domain"] == "memory"
+)
+check("domain_scores reports the stored level 0, not 1", memory_score["level"], 0)
+check(
+    "0 is not confused with uncalibrated",
+    memory_score["level"] == 0 and memory_score["level"] is not None,
+    True,
+)
 
 # The coach's own read of "where is this patient now".
 plan = agents._rule_difficulty_plan(db, patient, lookback=8)

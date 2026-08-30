@@ -12,13 +12,8 @@ from ..domains import (
     GAME_LABELS,
     PLAYABLE_DOMAINS,
 )
-from ..levels import MIN_LEVEL, first_level
+from . import base_levels
 from ..models import DifficultyHistory, GameSession, Patient, ReminderLog
-
-# A domain nobody has played has no measured level. It reports the bottom of
-# the scale rather than an invented 1, and is replaced by a real stored base
-# level (nullable, so "uncalibrated" stays distinguishable) in Sprint 2.
-UNPLAYED_START_LEVEL = MIN_LEVEL
 
 # A device that has not synced in this long is shown as offline. The NER
 # context makes this a normal state, not an error — the card says "offline",
@@ -140,10 +135,11 @@ def domain_scores(
                 "domain": domain,
                 "label": DOMAIN_LABELS[domain],
                 "score": score,
-                # A domain with no sessions has no measured level. It reports
-                # the floor rather than an invented 1 until Sprint 2 gives
-                # patients stored base levels and this becomes null.
-                "level": latest_levels.get(domain, UNPLAYED_START_LEVEL),
+                # None means uncalibrated -- nobody has measured this
+                # domain yet. That is different from level 0, which means
+                # measured and at the bottom of the scale, and the report has
+                # to be able to tell them apart.
+                "level": latest_levels.get(domain),
                 "trend": trend_of(subset),
                 "sessions": count,
             }
@@ -152,35 +148,19 @@ def domain_scores(
     return out
 
 
-def _latest_levels(db: Session, patient_id: int) -> dict[str, int]:
-    """Most recent level reached per domain.
+def _latest_levels(db: Session, patient_id: int) -> dict[str, int | None]:
+    """The patient's six stored base levels.
 
-    `row.new_level or row.level or 1` used to live here. On the 0-15 scale that
-    reads every genuine level-0 patient as level 1, and level 0 is a real
-    level -- those patients still play and still need a truthful trend line.
-    first_level() checks `is None`, so a stored 0 comes back as 0.
+    This used to infer a level by scanning the newest 80 sessions and taking
+    `new_level or level or 1` per domain. Two things were wrong with that: the
+    `or` chain read every genuine level-0 patient as level 1, and an inferred
+    level cannot represent six numbers that move independently on a weekly
+    cadence -- it only ever knew what the last round happened to set.
 
-    A domain with no sessions is simply absent from the returned map rather
-    than defaulted, because "not measured yet" and "measured at the bottom of
-    the scale" are different facts. Stored base levels replace this inference
-    entirely in Sprint 2 -- six numbers on the patient record, which is the
-    only thing that can represent six independently moving levels.
+    Levels are stored now (patient_domain_levels). None means uncalibrated and
+    stays None; it is never filled in with a number nobody measured.
     """
-    rows = (
-        db.query(GameSession)
-        .filter(GameSession.patient_id == patient_id)
-        .order_by(GameSession.created_at.desc())
-        .limit(80)
-        .all()
-    )
-    levels: dict[str, int] = {}
-    for row in rows:
-        if row.domain in levels:
-            continue
-        resolved = first_level(row.new_level, row.level)
-        if resolved is not None:
-            levels[row.domain] = resolved
-    return levels
+    return base_levels.levels_for(db, patient_id)
 
 
 # ── Adherence ─────────────────────────────────────────────────────────────────

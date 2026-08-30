@@ -8,6 +8,8 @@
 // block — an adult reading a screen can wait three seconds, a patient who has
 // just finished a game cannot.
 
+import { domainForGame } from "@shared/domains";
+
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "sahaay-auth-token";
 const ROLE_KEY = "sahaay-auth-role";
@@ -251,6 +253,9 @@ export function toSyncPayload(row) {
     dexie_id: row.id ?? null,
     patient_id: row.serverPatientId ?? row.patientId,
     game_type: row.gameType,
+    // The device sends the domain it measured. The server used to resolve it
+    // from game_type, which froze a four-domain label into every row.
+    domain: row.domain ?? domainForGame(row.gameType),
     score: row.score ?? null,
     total: row.total ?? null,
     moves: row.moves ?? null,
@@ -259,6 +264,11 @@ export function toSyncPayload(row) {
     new_level: row.newLevel ?? null,
     duration_ms: row.durationMs ?? null,
     completed: Boolean(row.completed),
+    // Rows written before schema v4 have no status; they all came from games
+    // that hardcoded completed:true, so `completed` is what it meant.
+    status: row.status ?? (row.completed ? "completed" : "abandoned"),
+    item_ids: row.itemIds ?? null,
+    session_id: row.sessionId ?? null,
     created_at: row.createdAt ?? null,
     reason: row.reason ?? null,
     source: row.source ?? "rule",

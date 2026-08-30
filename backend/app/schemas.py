@@ -83,12 +83,15 @@ class GameSessionCreate(BaseModel):
     """One session pushed up from the Dexie offline queue.
 
     The client maps its camelCase row onto these names before sending — see
-    api.js toSyncPayload(). `domain` is resolved server-side from game_type,
-    so the client never sends it.
+    api.js toSyncPayload(). `domain` now comes FROM the client: the device
+    knows which domain it was measuring, and resolving it server-side froze a
+    four-domain label into every historical row. The server still falls back
+    to domain_for_game() when an older client omits it.
     """
     dexie_id: int | None = None
     patient_id: int
     game_type: str
+    domain: str | None = None
     score: float | None = None
     total: float | None = None
     moves: int | None = None
@@ -99,6 +102,18 @@ class GameSessionCreate(BaseModel):
     started_at: datetime | None = None
     ended_at: datetime | None = None
     completed: bool = True
+
+    # "completed" | "abandoned". Defaults to completed so an older client that
+    # does not send it keeps working. A quit round sends "abandoned" with null
+    # scores for what was not played -- never 0, which would be
+    # indistinguishable from a genuinely scored zero.
+    status: Literal["completed", "abandoned"] = "completed"
+
+    # Ids of the items shown, for the 14-day no-repeat rule.
+    item_ids: list[str] | None = None
+    # Groups the rounds of one sitting.
+    session_id: str | None = None
+
     created_at: datetime | None = None
     reason: str | None = None
     source: str = "rule"
@@ -110,6 +125,8 @@ class GameSessionOut(BaseModel):
     patient_id: int
     game_type: str
     domain: str
+    status: str
+    session_id: str | None
     score: float | None
     total: float | None
     moves: int | None
@@ -222,11 +239,14 @@ class ClinicalNoteOut(BaseModel):
 # ── Analytics (Doctor Dashboard) ──────────────────────────────────────────────
 
 class DomainScore(BaseModel):
-    """One of the four mini-scores on a patient card."""
+    """One of the six mini-scores on a patient card."""
     domain: str
     label: str
     score: int | None = Field(None, description="0-100, null when never played")
-    level: int
+    # Nullable, and the distinction matters: null means nobody has calibrated
+    # this domain, 0 means calibrated at the bottom of the 0-15 scale. A
+    # non-nullable int here would have forced one of those to lie.
+    level: int | None = Field(None, description="0-15, null when uncalibrated")
     trend: Literal["improving", "stable", "declining", "unknown"]
     sessions: int
 

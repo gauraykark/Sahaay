@@ -8,7 +8,8 @@
 
 import Dexie from "dexie";
 
-import { levelOrNull } from "@shared/levels";
+import { DOMAINS, domainForGame } from "@shared/domains";
+import { clampLevel, levelOrNull } from "@shared/levels";
 
 export const db = new Dexie("sahaay");
 
@@ -81,6 +82,69 @@ db.version(3).stores({
   // replaces rather than accumulates.
   aiPlans: "[patientId+gameType], patientId, gameType, generatedAt",
 });
+
+// v4: six stored base levels, a real abandon path, and item rotation.
+//
+// Three additions and one removal:
+//
+//   domainLevels — the six DSM-5 base levels, one row per patient per domain,
+//     moving independently. Before this the level was inferred from the newest
+//     session, which cannot represent six numbers on separate weekly cadences.
+//     `level` is NULL for uncalibrated and 0 for measured-at-the-bottom, and
+//     those are different facts — see shared/levels.js.
+//
+//   itemHistory — when each item was last shown, for the 14-day no-repeat
+//     rule. Without it a patient memorises the same twenty pictures and the
+//     trend line reports improvement that never happened.
+//
+//   gameSessions gains status / itemIds / sessionId. Every game used to
+//     hardcode completed:true, so no round could be logged as abandoned.
+//
+//   aiPlans is DROPPED. Per-round AI difficulty is being replaced by a
+//     deterministic formula; the readers are stubbed here and removed with
+//     the rest of the coach in Sprint 7.
+//
+// Dexie carries every unlisted table forward untouched, so patients,
+// difficultyState, settings and both vault tables survive as they are.
+db.version(4)
+  .stores({
+    patients: "++id, name, isDemo, serverId, createdAt",
+    gameSessions:
+      "++id, patientId, gameType, domain, score, moves, completed, status, sessionId, createdAt, synced",
+    difficultyState: "[patientId+gameType], patientId, gameType, level",
+    settings: "key",
+    vaultPeople: "++id, patientId, name, relationship, createdAt",
+    vaultRoutineSteps: "++id, patientId, order, time, activity, createdAt",
+
+    // One row per patient per domain. The pair is the primary key, so a
+    // level write replaces rather than accumulates.
+    domainLevels: "[patientId+domain], patientId, domain, level, updatedAt",
+
+    // One row per item shown. Queried by [patientId+domain] to find what is
+    // still eligible, and by playedAt to age rows out.
+    itemHistory: "++id, [patientId+domain], patientId, domain, itemId, playedAt",
+
+    // Dropped — see above.
+    aiPlans: null,
+  })
+  .upgrade(async (tx) => {
+    // Existing rounds all predate the abandon path, and every one of them was
+    // written by a game that hardcoded completed:true. Stamping them
+    // "completed" is not an assumption, it is what the old column already
+    // meant. Anything genuinely incomplete stays honest via `completed`.
+    await tx
+      .table("gameSessions")
+      .toCollection()
+      .modify((row) => {
+        if (row.status === undefined) {
+          row.status = row.completed ? "completed" : "abandoned";
+        }
+      });
+
+    // The inert flag left behind by migrateLegacyMemoryLevels(), deleted in
+    // Sprint 0. Nothing reads it; sweep it so the table stays legible.
+    await tx.table("settings").delete("memoryDifficultyV2");
+  });
 
 // ---------------------------------------------------------------------
 // Active patient helpers
@@ -228,7 +292,9 @@ export async function resetDemoPatientData() {
  */
 export async function logGameSession({
   gameType,
+  domain = null,
   completed = true,
+  status = null,
   score = null,
   total = null,
   moves = null,
@@ -237,6 +303,8 @@ export async function logGameSession({
   newLevel = null,
   durationMs = null,
   reason = null,
+  itemIds = null,
+  sessionId = null,
 } = {}) {
   // A caregiver previewing the patient's screen must not write to that
   // patient's clinical record. Nothing is stored and nothing syncs.
@@ -244,9 +312,19 @@ export async function logGameSession({
 
   const patientId = await getActivePatientId();
 
+  // A row is written EVERY time a game ends — win, lose or quit. Logging only
+  // some of them makes the tracking blind: an abandoned round that writes
+  // nothing looks identical to a round that never started.
+  const resolvedStatus = status ?? (completed ? "completed" : "abandoned");
+
+  // The device knows which domain it was measuring, so it says so. Resolving
+  // this server-side stamped a four-domain label into every historical row.
+  const resolvedDomain = domain ?? domainForGame(gameType);
+
   const id = await db.gameSessions.add({
     patientId,
     gameType,
+    domain: resolvedDomain,
     score,
     total,
     moves,
@@ -255,10 +333,21 @@ export async function logGameSession({
     newLevel,
     durationMs,
     reason,
-    completed: completed ? 1 : 0,
+    itemIds,
+    sessionId,
+    // `completed` stays for the existing dashboard readers; `status` is what
+    // the clinical layer uses from here on.
+    completed: resolvedStatus === "completed" ? 1 : 0,
+    status: resolvedStatus,
     createdAt: new Date().toISOString(),
     synced: 0, // flips to 1 once pushed to the backend
   });
+
+  // Rotation bookkeeping travels with the round, so an abandoned round still
+  // burns the items it actually showed — the patient saw them either way.
+  if (resolvedDomain && itemIds?.length) {
+    await recordItemsShown(resolvedDomain, itemIds);
+  }
 
   // Push in the background right away — waiting for the browser's "online"
   // event means a device that never went offline never syncs at all.
@@ -268,6 +357,40 @@ export async function logGameSession({
     .catch(() => {});
 
   return id;
+}
+
+/**
+ * Log a round the patient walked away from.
+ *
+ * Unplayed domains get NULL, never 0. A zero from quitting is
+ * indistinguishable from a zero from decline, and mixing them would poison
+ * every trend line built on top. Leaving is never treated as failure — this
+ * exists so that quitting is *measured*, not punished.
+ */
+export async function logAbandonedSession({
+  gameType,
+  domain = null,
+  level = null,
+  durationMs = null,
+  itemIds = null,
+  sessionId = null,
+} = {}) {
+  return logGameSession({
+    gameType,
+    domain,
+    status: "abandoned",
+    completed: false,
+    // Explicitly null: nothing was measured, so nothing is claimed.
+    score: null,
+    total: null,
+    moves: null,
+    errors: null,
+    level,
+    newLevel: null,
+    durationMs,
+    itemIds,
+    sessionId,
+  });
 }
 
 /** Returns the most recent sessions for the active patient, newest first. */
@@ -534,60 +657,119 @@ export async function setServerPatientId(serverId, patientId = null) {
 // Cached AI difficulty plans (v3)
 // ---------------------------------------------------------------------
 //
-// A plan holds three branches — what to do if the next round goes well,
-// acceptably, or poorly — because the outcome is not known when the plan is
-// written. The device applies whichever branch matches, offline, instantly.
+// The aiPlans table is gone as of schema v4. Per-round AI difficulty is
+// replaced by a deterministic formula: the same inputs must always give the
+// same level, which no model can promise.
+//
+// These three are kept as no-ops rather than deleted outright because their
+// callers -- resolveNextLevel() and the sync orchestrator -- belong to
+// Sprint 7, and removing the functions now would break them mid-rewrite for
+// no gain. getAIPlan() returning null is already the "fall back to the rule
+// engine" signal, so the game loop degrades exactly as designed.
+//
+// SPRINT 7: delete all three, with their call sites in difficulty.js and
+// api.js.
 
-// A plan older than this is no longer trusted. A patient offline for three
-// weeks should not keep receiving guidance built on last month's data.
-const PLAN_MAX_AGE_DAYS = 7;
-const PLAN_MAX_ROUNDS = 10;
+/** No-op. The plan table is gone; kept so Sprint 7's callers still resolve. */
+export async function saveAIPlan() {
+  return null;
+}
 
-/** Stores every game plan from one /ai/adapt-difficulty response. */
-export async function saveAIPlan(response) {
+/** Always null — the signal to use the deterministic path. */
+export async function getAIPlan() {
+  return null;
+}
+
+/** No-op. Nothing to age when there are no plans. */
+export async function markPlanUsed() {}
+
+// ---------------------------------------------------------------------
+// Base levels — the six DSM-5 domains
+// ---------------------------------------------------------------------
+//
+// Six numbers per patient, one per domain, moving INDEPENDENTLY. Memory
+// sliding while executive holds flat is a different clinical picture from a
+// global decline, and one number cannot show the difference.
+//
+// null means UNCALIBRATED — nobody has measured this domain yet.
+// 0 means measured, at the bottom of the 0-15 scale.
+// Those are different facts. Never collapse them; never write `|| 1`.
+
+/** The six base levels for the active patient. Always six keys. */
+export async function getDomainLevels(patientId = null) {
+  const id = patientId ?? (await getActivePatientId());
+  const rows = await db.domainLevels.where("patientId").equals(id).toArray();
+  const stored = Object.fromEntries(rows.map((r) => [r.domain, levelOrNull(r.level)]));
+  return Object.fromEntries(DOMAINS.map((d) => [d, stored[d] ?? null]));
+}
+
+/** One domain's base level, or null when uncalibrated. */
+export async function getDomainLevel(domain) {
   const patientId = await getActivePatientId();
-  const generatedAt = response.generated_at ?? new Date().toISOString();
-
-  return db.transaction("rw", db.aiPlans, async () => {
-    for (const plan of response.plans ?? []) {
-      await db.aiPlans.put({
-        patientId,
-        gameType: plan.game_type,
-        currentLevel: plan.current_level,
-        ifGood: plan.if_good,
-        ifOk: plan.if_ok,
-        ifPoor: plan.if_poor,
-        nextGame: response.next_game ?? null,
-        source: response.source ?? "rule",
-        generatedAt,
-        roundsSince: 0,
-      });
-    }
-  });
+  const row = await db.domainLevels.get([patientId, domain]);
+  return levelOrNull(row?.level);
 }
 
 /**
- * The plan for one game, or null when there is none or it has gone stale.
+ * Write one domain's base level.
  *
- * Returning null is the signal to fall back to the rule engine — which is
- * why staleness is checked here rather than at the call site.
+ * Respects preview mode for the same reason logGameSession does: a caregiver
+ * trying a game must not move the patient's real clinical numbers.
  */
-export async function getAIPlan(gameType) {
+export async function setDomainLevel(domain, level, reason = null, source = "rule") {
+  if (isPreviewMode()) return null;
+  if (!DOMAINS.includes(domain)) {
+    throw new Error(`unknown domain: ${domain}`);
+  }
   const patientId = await getActivePatientId();
-  const plan = await db.aiPlans.get([patientId, gameType]);
-  if (!plan) return null;
-
-  const ageDays = (Date.now() - new Date(plan.generatedAt).getTime()) / 86400000;
-  if (ageDays > PLAN_MAX_AGE_DAYS) return null;
-  if ((plan.roundsSince ?? 0) >= PLAN_MAX_ROUNDS) return null;
-
-  return plan;
+  return db.domainLevels.put({
+    patientId,
+    domain,
+    level: clampLevel(level),
+    reason,
+    source,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
-/** Counts a round against the plan, so it expires on use as well as on age. */
-export async function markPlanUsed(gameType) {
+// ---------------------------------------------------------------------
+// Item rotation — the 14-day no-repeat rule
+// ---------------------------------------------------------------------
+//
+// If the same twenty pictures come round every day the patient memorises
+// those specific pictures, scores climb, and the trend line reports
+// improvement where nothing changed. This is the difference between a
+// measurement and a number that drifts upward on its own.
+
+export const ITEM_ROTATION_DAYS = 14;
+
+/** Record that these items were shown, so rotation can exclude them. */
+export async function recordItemsShown(domain, itemIds, playedAt = null) {
+  if (isPreviewMode()) return null;
+  if (!itemIds?.length) return null;
+
   const patientId = await getActivePatientId();
-  const plan = await db.aiPlans.get([patientId, gameType]);
-  if (!plan) return;
-  await db.aiPlans.put({ ...plan, roundsSince: (plan.roundsSince ?? 0) + 1 });
+  const when = playedAt ?? new Date().toISOString();
+  return db.itemHistory.bulkAdd(
+    itemIds.map((itemId) => ({ patientId, domain, itemId, playedAt: when }))
+  );
+}
+
+/** Item ids shown in this domain within the rotation window. */
+export async function recentItemIds(domain, days = ITEM_ROTATION_DAYS) {
+  const patientId = await getActivePatientId();
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const rows = await db.itemHistory
+    .where("[patientId+domain]")
+    .equals([patientId, domain])
+    .toArray();
+  return new Set(rows.filter((r) => r.playedAt >= cutoff).map((r) => r.itemId));
+}
+
+/** Drop history well past the window so the table cannot grow without bound. */
+export async function pruneItemHistory(days = ITEM_ROTATION_DAYS * 3) {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const stale = await db.itemHistory.filter((r) => r.playedAt < cutoff).toArray();
+  if (stale.length) await db.itemHistory.bulkDelete(stale.map((r) => r.id));
+  return stale.length;
 }

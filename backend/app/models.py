@@ -119,6 +119,57 @@ class Patient(Base):
     ai_reports: Mapped[list["AIReport"]] = relationship(
         "AIReport", back_populates="patient", cascade="all, delete-orphan"
     )
+    domain_levels: Mapped[list["PatientDomainLevel"]] = relationship(
+        "PatientDomainLevel", back_populates="patient", cascade="all, delete-orphan"
+    )
+
+
+class PatientDomainLevel(Base):
+    """A patient's base level in one of the six domains.
+
+    Six rows per patient, one per domain, moving INDEPENDENTLY. That
+    independence is the whole clinical signal: memory sliding while executive
+    holds flat looks different from a global decline, and a single number
+    cannot show the difference.
+
+    A table rather than six columns on `patients` for three reasons: adding a
+    seventh domain is a row not a migration, every level carries its own
+    "when did this last move and why", and a domain that has never been
+    calibrated is simply an absent row rather than a column full of nulls
+    that every reader has to remember to check.
+
+    LEVEL IS NULLABLE AND THAT IS LOAD-BEARING. `None` means uncalibrated --
+    nobody has measured this domain yet. `0` means measured, at the bottom of
+    the 0-15 scale. Those are different facts and the report must be able to
+    tell them apart: one says "we do not know", the other says "we know, and
+    it is bad". Never default this to 0, and never to 1.
+    """
+    __tablename__ = "patient_domain_levels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    patient_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("patients.id"), nullable=False, index=True
+    )
+    domain: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+
+    # 0-15, or NULL for uncalibrated. See app/levels.py -- the bounds live
+    # there, once, shared with shared/levels.js.
+    level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Why it last moved, and what moved it ("calibration" | "weekly" | "rule").
+    # The weekly evaluator in Sprint 6 writes these.
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="calibration")
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+    patient: Mapped["Patient"] = relationship("Patient", back_populates="domain_levels")
+
+    __table_args__ = (
+        UniqueConstraint("patient_id", "domain", name="uq_domain_level_patient_domain"),
+    )
 
 
 class GameSession(Base):
@@ -137,8 +188,10 @@ class GameSession(Base):
     )
 
     game_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    # Resolved from game_type at write time (domains.domain_for_game) so the
-    # dashboard never has to compute it on read.
+    # Sent by the client. It used to be resolved here from game_type, which
+    # froze a four-domain label into every historical row; the device knows
+    # which domain it was measuring, so it says so. The server still falls
+    # back to domain_for_game() when an older client omits it.
     domain: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
 
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -154,6 +207,24 @@ class GameSession(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # "completed" | "abandoned". Every game used to hardcode completed=True,
+    # so no round could ever be logged as abandoned -- which made 60% of the
+    # old attention score a constant, and left the quit path unmeasured.
+    # An abandoned row carries null scores for what was not played, never 0:
+    # a zero from quitting is indistinguishable from a zero from decline, and
+    # that would poison the trend line.
+    status: Mapped[str] = mapped_column(String(12), default="completed", index=True)
+
+    # Which items were shown, for the 14-day no-repeat rule. Comma-separated
+    # ids; a plain string keeps this readable in sqlite and avoids a JSON
+    # column that only one query would ever use.
+    item_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Groups the rounds of one sitting, so "2 sessions a day" can be counted
+    # and a resumed session can be recognised. Client-generated.
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, index=True
     )

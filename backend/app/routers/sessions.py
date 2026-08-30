@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import CurrentUser, resolve_patient_access
 from ..database import get_db
-from ..domains import domain_for_game
+from ..domains import DOMAINS, domain_for_game
 from ..models import DifficultyHistory, GameSession, Patient
 from ..schemas import GameSessionOut, SyncRequest, SyncResponse
 
@@ -77,13 +77,17 @@ def sync_sessions(
                 continue
             seen.add(key)
 
-        # domain is NOT NULL, and an unrecognised game type resolves to None.
-        # Without this guard the insert fails a constraint and the IntegrityError
-        # handler below swallows it -- the row would vanish and the only trace
-        # would be the skipped count. Skip it here instead, for the same reason
-        # and visibly. Sprint 2 moves domain into the payload and retires this.
-        domain = domain_for_game(item.game_type)
-        if domain is None:
+        # The client sends the domain it was measuring. Resolving it here froze
+        # a four-domain label into every historical row and made them
+        # un-remappable. domain_for_game() is now only a fallback for an older
+        # client that does not send one.
+        #
+        # domain is NOT NULL, so an unrecognised game type with no domain in
+        # the payload has to skip visibly -- otherwise the insert trips the
+        # constraint and the IntegrityError handler below swallows it, and the
+        # row vanishes with nothing but the skipped count to show for it.
+        domain = item.domain or domain_for_game(item.game_type)
+        if domain not in DOMAINS:
             skipped += 1
             continue
 
@@ -103,6 +107,11 @@ def sync_sessions(
             started_at=item.started_at,
             ended_at=item.ended_at,
             completed=item.completed,
+            status=item.status,
+            # Stored as a comma-separated string; the 14-day rotation check is
+            # the only reader and it wants membership, not structure.
+            item_ids=",".join(item.item_ids) if item.item_ids else None,
+            session_id=item.session_id,
             created_at=item.created_at or datetime.now(timezone.utc),
         )
 
