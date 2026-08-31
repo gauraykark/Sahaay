@@ -36,10 +36,22 @@ const FILTERS = [
 function matchesFilter(patient, filter) {
   switch (filter) {
     case "attention":
-      return patient.risk === "high" || patient.trend === "declining";
+      // A flagged domain counts, and it has to. A patient whose memory base
+      // level has fallen two steps while the other five hold reads "stable"
+      // overall -- one domain of six moves the mean by a sixth as much, which
+      // lands inside the stable band -- so risk and trend alone would leave
+      // this chip empty while the priority strip above it says two patients
+      // need attention. The strip was right.
+      return (
+        patient.risk === "high" ||
+        patient.trend === "declining" ||
+        (patient.flagged_domains?.length ?? 0) > 0
+      );
     case "improving":
       return patient.trend === "improving";
     case "stable":
+      // A patient with too little data is not stable. It is the one word
+      // that must never stand in for not knowing.
       return patient.trend === "stable";
     case "offline":
       return patient.is_offline;
@@ -243,6 +255,7 @@ export default function DoctorDashboard() {
                   key={patient.id}
                   patient={patient}
                   onOpen={openPatient}
+                  isFocused={patient.id === data.focus_patient_id}
                 />
               ))
             )}

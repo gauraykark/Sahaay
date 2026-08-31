@@ -143,6 +143,25 @@ export async function listPatientsRemote() {
 }
 
 /**
+ * The six domain scores for one patient, from the server.
+ *
+ * The caregiver dashboard is otherwise read entirely out of this device's
+ * Dexie, which only knows what this device played. The clinical picture is
+ * assembled server-side from every synced round, so it has to be asked for.
+ *
+ * Returns null rather than throwing when offline: the rest of the caregiver
+ * dashboard works without a network and must keep working.
+ */
+export async function getPatientProgress(patientId) {
+  if (!getToken() || !patientId) return null;
+  try {
+    return await apiFetch(`/patients/${patientId}/progress`);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Pull the signed-in caregiver's patients from the server into Dexie.
  *
  * The dashboard and login list read IndexedDB only (offline-first), so a

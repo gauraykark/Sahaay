@@ -34,6 +34,7 @@ import {
 import Avatar from "../components/ui/Avatar";
 import Button from "../components/ui/Button";
 import TrendGraph from "../components/ui/TrendGraph";
+import { DomainFlagBadge } from "../components/ui/Badge";
 import { DomainCard } from "../components/ui/DomainScore";
 import { EmptyState, SectionCard, SectionHeading } from "../components/ui/Card";
 import StatTile, { ComparisonStat } from "../components/ui/StatTile";
@@ -162,6 +163,9 @@ export default function PatientClinicalView() {
     recommended_actions,
     routine_steps,
     latest_report,
+    has_enough_data: hasEnoughData = true,
+    sittings_14d: sittings = 0,
+    flagged_domains: flags = [],
   } = data;
 
   return (
@@ -261,7 +265,19 @@ export default function PatientClinicalView() {
         {/* ── Cognitive domains breakdown ───────────────────────────── */}
         <section>
           <SectionHeading icon={FirstAid}>Cognitive domains</SectionHeading>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {flags.length > 0 ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {flags.map((flag) => (
+                <DomainFlagBadge key={flag.domain} flag={flag} />
+              ))}
+              <p className="text-sm text-neutral-600">
+                Base level down {Math.abs(flags[0].delta)} steps over 30 days
+                while the other domains held.
+              </p>
+            </div>
+          ) : null}
+          {/* Six now, so 3x2 on large screens rather than 4 across. */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {domains.map((domain) => (
               <DomainCard key={domain.domain} domain={domain} />
             ))}
@@ -271,6 +287,18 @@ export default function PatientClinicalView() {
         {/* ── Trend graph ───────────────────────────────────────────── */}
         <SectionCard>
           <SectionHeading icon={ChartLine}>Last 30 days</SectionHeading>
+          {/* NEVER DRAW A LINE THE DATA CANNOT SUPPORT. Below the trust
+              threshold the dots stay -- they are real measurements that
+              really happened -- but the graph is not offered as a trend, and
+              the reader is told the count so they can judge it themselves.
+              A flat line and no data look identical and mean the opposite. */}
+          {hasEnoughData ? null : (
+            <p className="mb-3 text-sm text-neutral-600 bg-[#fbf3e6] border border-[#eddcbe] rounded-lg px-3 py-2">
+              Not enough data to read a trend — {sittings} session
+              {sittings === 1 ? "" : "s"} in the last 14 days. The points below
+              are what was measured, not a direction.
+            </p>
+          )}
           <TrendGraph data={trend_30d} />
           <p className="text-xs text-neutral-400 mt-2">
             Each dot is a day with sessions. A dashed line spans days with no

@@ -38,7 +38,18 @@ const TREND_META = {
   improving: { tone: "good", icon: ArrowUp, label: "Improving" },
   stable: { tone: "neutral", icon: ArrowRight, label: "Stable" },
   declining: { tone: "warn", icon: ArrowDown, label: "Declining" },
+  // Two different gaps, deliberately worded the same way to the reader and
+  // kept apart in the data. `unknown` is one domain with too few scored
+  // rounds; `insufficient_data` is the patient not having sat down often
+  // enough for any of their six lines to be trustworthy. Both must read as an
+  // absence of evidence, never as a flat line -- a flat line and no data look
+  // identical on a graph and mean opposite things.
   unknown: { tone: "neutral", icon: ArrowRight, label: "Not enough data" },
+  insufficient_data: {
+    tone: "neutral",
+    icon: ArrowRight,
+    label: "Not enough data",
+  },
 };
 
 export function TrendBadge({ trend }) {
@@ -46,6 +57,23 @@ export function TrendBadge({ trend }) {
   return (
     <Badge tone={meta.tone} icon={meta.icon}>
       {meta.label}
+    </Badge>
+  );
+}
+
+// A domain whose stored base level has fallen two or more steps and stayed
+// down. Amber, not red: this is "look at this", not "something has gone
+// wrong", and the distinction matters to a caregiver reading it about their
+// own parent.
+//
+// It names the domain. A flag that only says "declining" tells a caregiver
+// something is wrong without telling them what changed, which is the exact
+// failure of a single overall score.
+export function DomainFlagBadge({ flag }) {
+  if (!flag) return null;
+  return (
+    <Badge tone="warn" icon={ArrowDown}>
+      {flag.label} down {Math.abs(flag.delta)}
     </Badge>
   );
 }

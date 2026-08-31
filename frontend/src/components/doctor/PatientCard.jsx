@@ -14,7 +14,7 @@
 import { ArrowRight, User } from "@phosphor-icons/react";
 
 import Avatar from "../ui/Avatar";
-import { OfflineBadge, RiskBadge, TrendBadge } from "../ui/Badge";
+import { DomainFlagBadge, OfflineBadge, RiskBadge, TrendBadge } from "../ui/Badge";
 import { DomainMiniScore } from "../ui/DomainScore";
 
 function relativeDay(iso) {
@@ -30,7 +30,7 @@ function relativeDay(iso) {
   return then.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-export default function PatientCard({ patient, onOpen }) {
+export default function PatientCard({ patient, onOpen, isFocused = false }) {
   const {
     id,
     name,
@@ -45,10 +45,22 @@ export default function PatientCard({ patient, onOpen }) {
     reason,
     risk,
     domains,
+    flagged_domains: flags = [],
+    sittings_14d: sittings = 0,
+    has_enough_data: hasEnoughData = true,
   } = patient;
 
   return (
-    <article className="bg-white border border-neutral-200 rounded-xl px-5 py-5">
+    <article
+      // The board opens on the patient the priority strip leads with, and the
+      // ring is how that patient is identifiable without navigating away from
+      // the caseload. A doctor still needs to see the other cards.
+      className={`bg-white rounded-xl px-5 py-5 border ${
+        isFocused
+          ? "border-primary-300 ring-2 ring-primary-100"
+          : "border-neutral-200"
+      }`}
+    >
       <div className="flex items-start gap-3">
         <Avatar name={name} photo={photo} id={id} size="md" />
 
@@ -64,6 +76,9 @@ export default function PatientCard({ patient, onOpen }) {
 
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               <RiskBadge risk={risk} />
+              {flags.map((flag) => (
+                <DomainFlagBadge key={flag.domain} flag={flag} />
+              ))}
               <OfflineBadge isOffline={is_offline} />
             </div>
           </div>
@@ -104,6 +119,17 @@ export default function PatientCard({ patient, onOpen }) {
               {adherence === null ? "—" : `${adherence}%`}
             </span>
           </span>
+          {/* Shown only when it is the reason there is no trend. The count is
+              what makes "not enough data" checkable rather than a shrug. */}
+          {hasEnoughData ? null : (
+            <span>
+              Sessions{" "}
+              <span className="text-neutral-800 font-medium tabular-nums">
+                {sittings}
+              </span>
+              <span className="text-neutral-400"> / 14 days</span>
+            </span>
+          )}
         </div>
 
         <button

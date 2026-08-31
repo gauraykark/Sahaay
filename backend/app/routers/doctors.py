@@ -38,17 +38,33 @@ def dashboard(
     patients = query.all()
 
     cards = [analytics.build_patient_card(db, patient) for patient in patients]
-    # Most urgent first, so the list matches the priority strip above it.
+    # Most urgent first, so the list matches the priority strip above it. A
+    # flagged domain sorts a patient above an equally-risky one without a
+    # flag: "which domain moved" is more actionable than "something did".
     risk_rank = {"high": 0, "medium": 1, "low": 2}
-    cards.sort(key=lambda c: (risk_rank[c["risk"]], c["name"].lower()))
+    cards.sort(
+        key=lambda c: (
+            risk_rank[c["risk"]],
+            0 if c["flagged_domains"] else 1,
+            c["name"].lower(),
+        )
+    )
+
+    priority = analytics.build_priority(cards)
+
+    # Where the board opens. The priority strip already answers "who first?",
+    # so the focus follows it rather than introducing a second opinion; if
+    # nothing is urgent enough to reach the strip, nothing is highlighted.
+    focus_patient_id = priority[0]["patient_id"] if priority else None
 
     return {
         "doctor_name": doctor.name,
         "designation": doctor.designation,
         "total_patients": len(patients),
-        "priority": analytics.build_priority(cards),
+        "priority": priority,
         "patients": cards,
         "assistant": analytics.build_assistant(db, cards, doctor.id),
+        "focus_patient_id": focus_patient_id,
     }
 
 
@@ -79,11 +95,21 @@ def clinical_view(
         round(sum(rates_prev) / len(rates_prev) * 100) if rates_prev else None
     )
 
-    domains = analytics.domain_scores(db, patient.id, sessions_30)
-    trend = analytics.trend_of(sessions_30)
+    # Same trust marker as the card, computed once and passed down, so the
+    # clinical view and the dashboard can never disagree about whether this
+    # patient has played enough for a trend to mean anything.
+    enough = analytics.has_enough_data(sessions_30)
+
+    domains = analytics.domain_scores(db, patient.id, sessions_30, enough_data=enough)
+    trend = analytics.trend_of(sessions_30) if enough else "insufficient_data"
     adherence_pct = analytics.adherence(db, patient.id)
+    flags = analytics.flagged_domains(db, patient.id)
     risk = analytics.risk_band(
-        trend, overall, adherence_pct, analytics.sudden_drop_z(sessions_30)
+        trend,
+        overall,
+        adherence_pct,
+        analytics.sudden_drop_z(sessions_30) if enough else None,
+        flags,
     )
 
     history = (
@@ -126,6 +152,14 @@ def clinical_view(
         "percentile": analytics.percentile_against(db, doctor.id, overall),
         "adherence": adherence_pct,
         "domains": domains,
+        "trend": trend,
+        "risk": risk,
+        "has_enough_data": enough,
+        "sittings_14d": analytics.count_sittings(sessions_30),
+        "flagged_domains": flags,
+        # The series is still returned when the marker is down -- the points
+        # are real measurements. It is the CLIENT that must not connect them
+        # into a trend line, and `has_enough_data` is how it knows.
         "trend_30d": analytics.trend_series(sessions_30, days=30),
         "difficulty_history": history,
         "notes": notes,

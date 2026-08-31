@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "sahaay-backend",
-      "runtimeExecutable": "backend/venv/Scripts/python.exe",
+      "runtimeExecutable": "venv/Scripts/python.exe",
       "runtimeArgs": [
         "-m",
         "uvicorn",

@@ -23,8 +23,9 @@ import {
 } from "../lib/db";
 import { MAX_LEVEL, levelOrNull } from "@shared/levels";
 import { formatRelativeDay, describeSession } from "../lib/utils";
-import { SourceBadge } from "../components/ui/Badge";
-import { getMe, hydratePatientsFromServer } from "../lib/api";
+import { DomainFlagBadge, SourceBadge } from "../components/ui/Badge";
+import { DomainMiniScore } from "../components/ui/DomainScore";
+import { getMe, getPatientProgress, hydratePatientsFromServer } from "../lib/api";
 import {
   NAME_CIRCLE_OPTIONS,
   memoryGridLabel,
@@ -243,6 +244,10 @@ function CaregiverDashboardContent() {
   const [vaultRoutine, setVaultRoutine] = useState([]);
   const [viewingPatientId, setViewingPatientId] = useState(null);
   const [caregiverName, setCaregiverName] = useState("");
+  // The six areas, from the server. Null until it arrives, and null forever
+  // if this device is offline -- the rest of this dashboard is Dexie-only and
+  // has to keep working without a network.
+  const [progress, setProgress] = useState(null);
 
   const reload = async () => {
     const patientId = await getActivePatientId();
@@ -270,6 +275,14 @@ function CaregiverDashboardContent() {
       )
     );
     setIsLoading(false);
+
+    // Server-side picture, fetched by SERVER id: the six domain scores are
+    // assembled from every synced round, not from what this device happens
+    // to hold. Deliberately after setIsLoading -- the dashboard renders on
+    // local data and this fills in when it arrives.
+    getPatientProgress(patientRow?.serverId).then(setProgress);
+
+    return allPatients;
   };
 
   useEffect(() => {
@@ -277,7 +290,27 @@ function CaregiverDashboardContent() {
       // Server → Dexie first, so a caregiver signing in on a fresh device
       // sees their patient instead of "No patients yet".
       await hydratePatientsFromServer().catch(() => {});
-      await reload();
+      const opened = await reload();
+
+      // OPEN STRAIGHT ONTO THE REAL PATIENT.
+      //
+      // A caregiver looks after one person, so landing on a list of one and
+      // making them tap it puts the flag they need to see one click away for
+      // nothing. With several the list is the right screen, because then
+      // choosing is a real decision.
+      //
+      // "Real" means server-backed. getActivePatientId() creates a local
+      // "Demo" profile when this device has never had one set, so a caregiver
+      // signing in on a fresh device has TWO rows -- that placeholder and the
+      // patient their account actually covers -- and the placeholder is the
+      // one that is active. Opening onto it shows an empty dashboard for
+      // somebody who does not exist, which is what happened here.
+      const real = (opened ?? []).filter((row) => row.serverId);
+      if (real.length === 1) {
+        await setActivePatientId(real[0].id);
+        setViewingPatientId(real[0].id);
+        await reload();
+      }
     })();
     getMe()
       .then((me) => setCaregiverName(me?.name || ""))
@@ -310,6 +343,7 @@ function CaregiverDashboardContent() {
       <PatientDetailDashboard
         isLoading={isLoading}
         patient={activePatient}
+        progress={progress}
         recentSessions={recentSessions}
         perGameLatest={perGameLatest}
         difficultyRows={difficultyRows}
@@ -549,6 +583,7 @@ function memoryRead(recentSessions, difficultyRows) {
 function PatientDetailDashboard({
   isLoading,
   patient,
+  progress,
   recentSessions,
   perGameLatest,
   difficultyRows,
@@ -606,6 +641,14 @@ function PatientDetailDashboard({
         {isLoading ? (
           <p className="text-neutral-400">Loading…</p>
         ) : (
+          <>
+          {/* THE SIX AREAS, FIRST ON THE PAGE.
+              Above the grid rather than inside it: this is the clinical
+              picture and everything below is device-local detail. It is also
+              the only place a caregiver can see a flagged domain at all --
+              the rest of this screen reads Dexie, which knows what this
+              device played, not what the six trend lines say. */}
+          <SixAreasCard progress={progress} />
           <div className="caregiver-patient-grid">
             <section className="area-info bg-white border border-neutral-200 rounded-xl px-5 py-5">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
@@ -783,9 +826,61 @@ function PatientDetailDashboard({
               </div>
             </section>
           </div>
+          </>
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * The six areas as the caregiver sees them.
+ *
+ * No risk band and no percentile -- those are clinical judgements for the
+ * doctor's screen. What a family needs is which area moved and whether there
+ * is enough recent play to believe it.
+ */
+function SixAreasCard({ progress }) {
+  if (!progress) return null;
+
+  const { domains, flagged_domains: flags = [], has_enough_data: enough, sittings_14d: sittings } =
+    progress;
+
+  return (
+    <section className="mb-4 bg-white border border-neutral-200 rounded-xl px-5 py-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500">
+          <FirstAid size={16} />
+          The six areas, last 30 days
+        </h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          {flags.map((flag) => (
+            <DomainFlagBadge key={flag.domain} flag={flag} />
+          ))}
+        </div>
+      </div>
+
+      {flags.length > 0 ? (
+        <p className="text-sm text-neutral-600 mb-3">
+          {flags.map((f) => f.label).join(" and ")} has been easing while the
+          other areas held steady. Worth mentioning at the next appointment.
+        </p>
+      ) : null}
+
+      {enough ? null : (
+        <p className="text-sm text-neutral-600 mb-3 bg-[#fbf3e6] border border-[#eddcbe] rounded-lg px-3 py-2">
+          Not enough recent sessions to say which way things are going —{" "}
+          {sittings} in the last 14 days. The scores below are real; the
+          direction is not something we can tell yet.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+        {domains.map((domain) => (
+          <DomainMiniScore key={domain.domain} domain={domain} />
+        ))}
+      </div>
+    </section>
   );
 }
 

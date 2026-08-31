@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from ..auth import CurrentUser, resolve_patient_access, visible_patients
 from ..database import get_db
 from ..models import ROLE_CAREGIVER, Patient
-from ..schemas import PatientCreate, PatientOut, PatientUpdate
+from ..schemas import (
+    PatientCreate,
+    PatientOut,
+    PatientProgressOut,
+    PatientUpdate,
+)
+from ..services import analytics
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -54,6 +60,34 @@ def get_patient(
     db: Annotated[Session, Depends(get_db)],
 ):
     return resolve_patient_access(user, patient_id, db)
+
+
+@router.get("/{patient_id}/progress", response_model=PatientProgressOut)
+def patient_progress(
+    patient_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """The six domain scores, levels and flags for one patient.
+
+    Scoped by the same access check as everything else here, so a caregiver
+    reaches exactly their own patient and a doctor reaches their caseload.
+    """
+    patient = resolve_patient_access(user, patient_id, db)
+    sessions = analytics.load_sessions(db, patient.id, days=30)
+    enough = analytics.has_enough_data(sessions)
+
+    return {
+        "patient_id": patient.id,
+        "patient_name": patient.name,
+        "domains": analytics.domain_scores(
+            db, patient.id, sessions, enough_data=enough
+        ),
+        "flagged_domains": analytics.flagged_domains(db, patient.id),
+        "has_enough_data": enough,
+        "sittings_14d": analytics.count_sittings(sessions),
+        "trend": analytics.trend_of(sessions) if enough else "insufficient_data",
+    }
 
 
 @router.patch("/{patient_id}", response_model=PatientOut)

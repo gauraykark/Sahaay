@@ -23,6 +23,28 @@ OFFLINE_AFTER_HOURS = 48
 TREND_BAND = 0.06        # +/- 6% counts as stable
 DROP_Z_THRESHOLD = -1.5  # z-score below this is a "sudden drop"
 
+# ── The trust marker ─────────────────────────────────────────────────────────
+#
+# Fewer than five SITTINGS in the last fortnight and we say so instead of
+# drawing a line. Spec section 11: never draw a trend the data cannot support,
+# because "we do not know yet" is a better answer than a guess that looks like
+# a measurement.
+#
+# Counted in sittings, not rows. One sitting writes one row per item -- sixteen
+# of them -- so a patient who played six times in a month has ninety-six rows,
+# comfortably past trend_of()'s four-rate minimum, and would otherwise get a
+# confident trend line drawn through six days of data. The row count measures
+# how many questions were asked; the sitting count measures how often the
+# patient showed up, and it is the second one that decides whether a trend is
+# real.
+TRUST_MIN_SITTINGS = 5
+TRUST_WINDOW_DAYS = 14
+
+# How far a base level must fall, and stay fallen, before the caregiver is
+# told. Two steps on a 0-15 scale, not one: one step is inside the noise the
+# weekly evaluator itself creates, and a flag that fires on noise gets ignored.
+LEVEL_DROP_FLAG = -2
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -54,15 +76,75 @@ def load_sessions(db: Session, patient_id: int, days: int = 30) -> list[GameSess
     )
 
 
+# ── Trust marker ──────────────────────────────────────────────────────────────
+
+def count_sittings(sessions: list[GameSession], days: int = TRUST_WINDOW_DAYS) -> int:
+    """Distinct play sittings inside the window.
+
+    A sitting is one `session_id` -- one time the patient sat down and worked
+    through the frozen list. Rows with no session_id are legacy: they predate
+    the session runner, when one row WAS one round, so each counts as its own
+    sitting rather than collapsing into a single anonymous group.
+    """
+    cutoff = _now() - timedelta(days=days)
+    grouped: set[str] = set()
+    loose = 0
+
+    for session in sessions:
+        created = _aware(session.created_at)
+        if created is None or created < cutoff:
+            continue
+        if session.session_id:
+            grouped.add(session.session_id)
+        else:
+            loose += 1
+
+    return len(grouped) + loose
+
+
+def has_enough_data(sessions: list[GameSession]) -> bool:
+    """Whether a trend may be drawn at all. See TRUST_MIN_SITTINGS."""
+    return count_sittings(sessions) >= TRUST_MIN_SITTINGS
+
+
 # ── Trend ─────────────────────────────────────────────────────────────────────
 
+def daily_rates(sessions: list[GameSession]) -> list[float]:
+    """Mean accuracy per calendar day, oldest first. The daily score.
+
+    THE UNIT OF ANALYSIS IS A DAY, NOT A ROW. A row is now one item -- a
+    single tap, scored 1 or 0 -- because the session runner logs each item
+    separately. Comparing raw rows means comparing coin flips: sixteen
+    Bernoulli draws a sitting give a half-window mean with a standard error
+    around ten points, comfortably wider than the six-point band that decides
+    "declining", so a perfectly flat patient's domains would each land on a
+    direction at random.
+
+    Averaging within the day first is not smoothing applied to taste. The
+    clinical model is explicitly built on a daily score per domain, of which
+    the base level is a seven-day read; a day is the smallest thing the design
+    treats as a measurement, and it is the right grain to compare.
+    """
+    buckets: dict[object, list[float]] = {}
+    for session in sessions:
+        rate = _accuracy(session)
+        created = _aware(session.created_at)
+        if rate is None or created is None:
+            continue
+        buckets.setdefault(created.date(), []).append(rate)
+    return [mean(values) for _, values in sorted(buckets.items())]
+
+
 def trend_of(sessions: list[GameSession]) -> str:
-    """Split the window in half and compare mean accuracy.
+    """Split the window in half and compare mean daily score.
 
     Simple on purpose: a doctor asking "why is this improving?" gets an
     answer they can check by hand.
+
+    Four DAYS, not four rounds. Four rounds could all be one afternoon, which
+    is a snapshot rather than a trend.
     """
-    rates = [r for r in (_accuracy(s) for s in sessions) if r is not None]
+    rates = daily_rates(sessions)
     if len(rates) < 4:
         return "unknown"
 
@@ -78,12 +160,18 @@ def trend_of(sessions: list[GameSession]) -> str:
 
 
 def sudden_drop_z(sessions: list[GameSession]) -> float | None:
-    """Z-score of the most recent session against the patient's own baseline.
+    """Z-score of the most recent DAY against the patient's own baseline.
 
     Compared against themselves, never against other patients — the only
     comparison that means anything clinically.
+
+    Per day for the same reason trend_of is: against a baseline of binary
+    rows the spread is about 0.43, so any single wrong answer scores near
+    -1.7 and trips the threshold. That would have put a "sudden drop" on
+    roughly a quarter of perfectly stable patients -- an alert that fires on
+    one wrong tap is an alert a doctor learns to ignore.
     """
-    rates = [r for r in (_accuracy(s) for s in sessions) if r is not None]
+    rates = daily_rates(sessions)
     if len(rates) < 6:
         return None
 
@@ -109,15 +197,26 @@ def sudden_drop_z(sessions: list[GameSession]) -> float | None:
 
 
 def domain_scores(
-    db: Session, patient_id: int, sessions: list[GameSession]
+    db: Session,
+    patient_id: int,
+    sessions: list[GameSession],
+    enough_data: bool | None = None,
 ) -> list[dict]:
     """One entry per domain, six of them, always, in a fixed order.
 
     Always six even when the patient has no data: a domain with nothing in it
     comes back with score None rather than being omitted, so the dashboard
     grid and the report agent both see a stable shape.
+
+    `enough_data` is the patient-wide trust marker. It is deliberately not
+    decided per domain: the question "has this person played enough for a
+    trend to mean anything" is about how often they sat down, and every domain
+    is measured in every sitting. Passing None computes it here.
     """
     latest_levels = _latest_levels(db, patient_id)
+    if enough_data is None:
+        enough_data = has_enough_data(sessions)
+    moved = level_drops(db, patient_id)
     out = []
 
     for domain in DOMAINS:
@@ -140,12 +239,59 @@ def domain_scores(
                 # measured and at the bottom of the scale, and the report has
                 # to be able to tell them apart.
                 "level": latest_levels.get(domain),
-                "trend": trend_of(subset),
+                # Below the trust threshold nothing gets a direction. Drawing
+                # six confident arrows off four sittings is exactly the guess
+                # the marker exists to prevent.
+                "trend": (
+                    domain_trend(
+                        subset,
+                        level=latest_levels.get(domain),
+                        level_delta=moved.get(domain, 0),
+                    )
+                    if enough_data
+                    else "insufficient_data"
+                ),
                 "sessions": count,
             }
         )
 
     return out
+
+
+def domain_trend(
+    sessions: list[GameSession], level: int | None, level_delta: int
+) -> str:
+    """The direction reported for one domain over the window.
+
+    READ OFF THE BASE LEVEL, NOT OFF RAW ACCURACY, whenever the domain has a
+    base level to read. Spec section 11 is explicit that the six base levels
+    and their 30-day movement ARE the report; accuracy is the noisy daily
+    score the level is a seven-day de-noised read of, and the level is the
+    number a clinician is being asked to trust.
+
+    The practical difference is large. A row is one item, scored 1 or 0, and
+    attention contributes a single item per sitting -- two a day. A 30-day
+    split-half comparison of that has a standard error near eight points
+    against a six-point band, so a perfectly steady attention domain lands on
+    "declining" or "improving" close to half the time. Nothing is wrong with
+    the patient or the arithmetic; there is simply not enough signal in sixty
+    binary draws to support a direction, and reporting one anyway is inventing
+    a finding. The base level moves at most one step a week and only on a
+    sustained pattern, so it does not have that problem.
+
+    NO RECORDED MOVE MEANS STEADY, not "unknown" -- but only for a domain that
+    has a stored base level. A level that has been calibrated and did not move
+    is a measurement: the weekly evaluation ran and found no reason to change
+    it. An uncalibrated domain has no such statement behind it, so that case
+    falls back to the accuracy comparison and its honest "unknown".
+    """
+    if level is None:
+        return trend_of(sessions)
+    if level_delta <= -1:
+        return "declining"
+    if level_delta >= 1:
+        return "improving"
+    return "stable"
 
 
 def _latest_levels(db: Session, patient_id: int) -> dict[str, int | None]:
@@ -161,6 +307,66 @@ def _latest_levels(db: Session, patient_id: int) -> dict[str, int | None]:
     stays None; it is never filled in with a number nobody measured.
     """
     return base_levels.levels_for(db, patient_id)
+
+
+# ── Base level drops ──────────────────────────────────────────────────────────
+
+def level_drops(
+    db: Session, patient_id: int, days: int = 30
+) -> dict[str, int]:
+    """How far each domain's base level has moved over the window.
+
+    Read off `difficulty_history`, not off the sessions: the base level is a
+    stored clinical number that moves at most one step per domain per week,
+    and the history is the record of those moves. Inferring it from the newest
+    session is what this replaces -- that only ever knew what the last round
+    happened to set, and could not represent six levels moving independently.
+
+    A domain with no recorded move maps to 0. Negative means decline.
+    """
+    cutoff = (_now() - timedelta(days=days)).replace(tzinfo=None)
+    rows = (
+        db.query(DifficultyHistory)
+        .filter(DifficultyHistory.patient_id == patient_id)
+        .filter(DifficultyHistory.created_at >= cutoff)
+        .order_by(DifficultyHistory.created_at.asc())
+        .all()
+    )
+
+    first_from: dict[str, int] = {}
+    last_to: dict[str, int] = {}
+    for row in rows:
+        if row.domain not in DOMAINS:
+            continue
+        first_from.setdefault(row.domain, row.from_level)
+        last_to[row.domain] = row.to_level
+
+    return {
+        domain: last_to[domain] - first_from[domain]
+        for domain in last_to
+    }
+
+
+def flagged_domains(db: Session, patient_id: int, days: int = 30) -> list[dict]:
+    """Domains whose base level has fallen far enough to tell the caregiver.
+
+    The threshold is LEVEL_DROP_FLAG (-2), applied per domain and never to an
+    average. Averaging is what a single-score dashboard does, and it is why
+    one domain sliding while five hold flat is invisible on one: a two-step
+    memory drop across six domains averages out to a third of a step.
+    """
+    out = []
+    for domain, delta in level_drops(db, patient_id, days=days).items():
+        if delta <= LEVEL_DROP_FLAG:
+            out.append(
+                {
+                    "domain": domain,
+                    "label": DOMAIN_LABELS[domain],
+                    "delta": delta,
+                }
+            )
+    out.sort(key=lambda d: d["delta"])
+    return out
 
 
 # ── Adherence ─────────────────────────────────────────────────────────────────
@@ -184,7 +390,11 @@ def adherence(db: Session, patient_id: int, days: int = 7) -> int | None:
 # ── Risk ──────────────────────────────────────────────────────────────────────
 
 def risk_band(
-    trend: str, overall: int | None, adherence_pct: int | None, drop_z: float | None
+    trend: str,
+    overall: int | None,
+    adherence_pct: int | None,
+    drop_z: float | None,
+    flags: list[dict] | None = None,
 ) -> str:
     """Additive risk. Deliberately readable rather than clever — a doctor can
     reconstruct why a patient was flagged."""
@@ -194,6 +404,17 @@ def risk_band(
         points += 2
     elif trend == "stable":
         points += 0
+    elif trend == "insufficient_data":
+        # No direction was read, so no direction is scored. Not knowing is not
+        # the same as being fine, but it is emphatically not evidence of harm,
+        # and inventing risk out of a gap in the data is how a trust marker
+        # gets quietly undone.
+        points += 0
+
+    # A base level down two steps and staying down. This is game data moving
+    # the verdict, which is the only thing allowed to.
+    if flags:
+        points += 2
 
     if drop_z is not None and drop_z <= DROP_Z_THRESHOLD:
         points += 2
@@ -213,12 +434,26 @@ def risk_band(
 
 # ── Reasons (deterministic today, AI-rewritten later) ─────────────────────────
 
+def flagged_domains_from(domains: list[dict], flags: list[dict] | None) -> list[dict]:
+    """The flags, restricted to domains this patient actually has data for.
+
+    A base level can be flagged for a domain nobody has played in the window;
+    naming it in the reason line would point the caregiver at a trend with no
+    recent evidence behind it.
+    """
+    if not flags:
+        return []
+    scored = {d["domain"] for d in domains if d["score"] is not None}
+    return [f for f in flags if f["domain"] in scored]
+
+
 def build_reason(
     sessions: list[GameSession],
     domains: list[dict],
     trend: str,
     drop_z: float | None,
     adherence_pct: int | None,
+    flags_in: list[dict] | None = None,
 ) -> str:
     """The short explanation under the trend arrow.
 
@@ -229,8 +464,35 @@ def build_reason(
     if not sessions:
         return "No sessions recorded yet."
 
+    if trend == "insufficient_data":
+        played = count_sittings(sessions)
+        return (
+            f"Only {played} session{'' if played == 1 else 's'} in the last "
+            f"{TRUST_WINDOW_DAYS} days - not enough to read a trend yet."
+        )
+
     if drop_z is not None and drop_z <= DROP_Z_THRESHOLD:
         return "Sharp drop in the most recent session compared to their usual range."
+
+    # A flagged domain is said first, and said as what it is: one domain
+    # moving while the rest hold. The overall trend for such a patient reads
+    # "stable" and is arithmetically correct -- one domain of six sliding
+    # moves the mean of all six by a sixth as much, which lands inside the
+    # stable band. Reporting only that would be true and useless. The whole
+    # reason for six independent numbers is that the sixth is visible.
+    flags = flagged_domains_from(domains, flags_in)
+    if flags:
+        others = [
+            d for d in domains
+            if d["score"] is not None and d["domain"] not in {f["domain"] for f in flags}
+        ]
+        steady = sum(1 for d in others if d["trend"] in ("stable", "improving"))
+        names = " and ".join(f["label"] for f in flags)
+        if steady:
+            return (
+                f"{names} easing while the other {steady} hold steady."
+            )
+        return f"{names} easing over recent sessions."
 
     weakest = min(
         (d for d in domains if d["score"] is not None),
@@ -291,10 +553,17 @@ def build_patient_card(db: Session, patient: Patient) -> dict:
     rates = [r for r in (_accuracy(s) for s in sessions) if r is not None]
     overall = round(mean(rates) * 100) if rates else None
 
-    trend = trend_of(sessions)
-    drop_z = sudden_drop_z(sessions)
-    domains = domain_scores(db, patient.id, sessions)
+    # The trust marker gates the verdict, not the numbers. Scores still show --
+    # they are measurements and they happened. What is withheld is the
+    # DIRECTION, because a direction is a claim about a pattern and four
+    # sittings do not make one.
+    enough = has_enough_data(sessions)
+
+    trend = trend_of(sessions) if enough else "insufficient_data"
+    drop_z = sudden_drop_z(sessions) if enough else None
+    domains = domain_scores(db, patient.id, sessions, enough_data=enough)
     adherence_pct = adherence(db, patient.id)
+    flags = flagged_domains(db, patient.id)
 
     last_active = _aware(sessions[-1].created_at) if sessions else None
     last_sync = _aware(patient.last_sync_at)
@@ -319,10 +588,18 @@ def build_patient_card(db: Session, patient: Patient) -> dict:
         "adherence": adherence_pct,
         "overall_score": overall,
         "trend": trend,
-        "reason": build_reason(sessions, domains, trend, drop_z, adherence_pct),
-        "risk": risk_band(trend, overall, adherence_pct, drop_z),
+        "reason": build_reason(
+            sessions, domains, trend, drop_z, adherence_pct, flags
+        ),
+        "risk": risk_band(trend, overall, adherence_pct, drop_z, flags),
         "domains": domains,
         "sessions_this_week": sessions_this_week,
+        # Sittings, not rows -- see count_sittings.
+        "sittings_14d": count_sittings(sessions),
+        "has_enough_data": enough,
+        # Which domains have dropped >= 2 base levels in 30 days. Named, never
+        # averaged: this is the whole reason six numbers beat one.
+        "flagged_domains": flags,
     }
 
 
@@ -361,6 +638,17 @@ def build_priority(cards: list[dict], limit: int = 3) -> list[dict]:
 
 
 def _headline(card: dict) -> str:
+    # A flagged domain wins the headline. It is the strongest thing we know
+    # about the patient -- a base level, the clinical number, down two steps
+    # and staying down -- and it names which of the six moved, which is the
+    # one thing a single overall score can never say.
+    flags = card.get("flagged_domains") or []
+    if flags:
+        return f"{flags[0]['label']} down {abs(flags[0]['delta'])} levels"
+
+    if card["trend"] == "insufficient_data":
+        return "Not enough recent sessions"
+
     if card["trend"] == "declining":
         weakest = min(
             (d for d in card["domains"] if d["score"] is not None),

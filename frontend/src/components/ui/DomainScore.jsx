@@ -1,9 +1,12 @@
-// The four domain mini-scores on a patient card, and the larger four-card
+// The six domain mini-scores on a patient card, and the larger six-card
 // breakdown on the clinical view.
 //
-// Only domains that have games behind them are rendered. designv2 §1: do not
-// show six abilities when four are measured — an empty ability card invites
-// exactly the question you do not want asked.
+// All six render now, including any with no data yet. The old rule was "do
+// not show six abilities when four are measured", which was right when
+// attention had no game behind it and would have been a permanently empty
+// card. Every domain has a game as of Sprint 4, so an empty one means this
+// patient has not played it -- which is a fact worth showing, not an
+// embarrassment worth hiding.
 //
 // The bar is a plain div, not a chart. At this size a library would add
 // weight to the PWA bundle and read no more clearly.
@@ -46,7 +49,16 @@ export function DomainCard({ domain }) {
     declining: "Easing",
     stable: "Steady",
     unknown: "Not enough data",
+    insufficient_data: "Not enough data",
   };
+
+  // "Level 0" and "not calibrated" are different facts and must not print the
+  // same. 0 is a real level, the bottom of the scale, measured; null means
+  // nobody has measured this domain yet. Rendering {level} raw printed
+  // "Level  · Steady" for the second one.
+  const levelText = level === null || level === undefined
+    ? "Not calibrated"
+    : `Level ${level}`;
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl px-4 py-4 min-w-0">
@@ -64,7 +76,7 @@ export function DomainCard({ domain }) {
       </div>
 
       <p className="mt-2.5 text-xs text-neutral-500">
-        Level {level} · {TREND_TEXT[trend] ?? "Steady"}
+        {levelText} · {TREND_TEXT[trend] ?? "Steady"}
       </p>
       <p className="text-xs text-neutral-400">
         {sessions === 0

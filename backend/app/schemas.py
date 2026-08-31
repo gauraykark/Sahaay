@@ -238,6 +238,24 @@ class ClinicalNoteOut(BaseModel):
 
 # ── Analytics (Doctor Dashboard) ──────────────────────────────────────────────
 
+# One definition for the four values a trend may take. They used to be spelled
+# out at each use site, and adding a fifth meant finding every one of them.
+#
+# "unknown" and "insufficient_data" are NOT the same answer. "unknown" means
+# this particular domain has too few scored rounds to compare halves of a
+# window. "insufficient_data" means the PATIENT has not sat down often enough
+# for any trend of theirs to be trustworthy -- it overrides every domain at
+# once, and it is the one the report surfaces as "not enough data".
+Trend = Literal["improving", "stable", "declining", "unknown", "insufficient_data"]
+
+
+class FlaggedDomain(BaseModel):
+    """A domain whose stored base level has fallen far enough to report."""
+    domain: str
+    label: str
+    delta: int = Field(description="Base levels moved, negative for a decline")
+
+
 class DomainScore(BaseModel):
     """One of the six mini-scores on a patient card."""
     domain: str
@@ -247,7 +265,7 @@ class DomainScore(BaseModel):
     # this domain, 0 means calibrated at the bottom of the 0-15 scale. A
     # non-nullable int here would have forced one of those to lie.
     level: int | None = Field(None, description="0-15, null when uncalibrated")
-    trend: Literal["improving", "stable", "declining", "unknown"]
+    trend: Trend
     sessions: int
 
 
@@ -267,11 +285,35 @@ class PatientCardOut(BaseModel):
     is_offline: bool
     adherence: int | None
     overall_score: int | None
-    trend: Literal["improving", "stable", "declining", "unknown"]
+    trend: Trend
     reason: str
     risk: Literal["low", "medium", "high"]
     domains: list[DomainScore]
     sessions_this_week: int
+    # Sittings in the trust window, not rows: one sitting writes a row per
+    # item, so the row count says nothing about how often they showed up.
+    sittings_14d: int = 0
+    has_enough_data: bool = True
+    flagged_domains: list[FlaggedDomain] = Field(default_factory=list)
+
+
+class PatientProgressOut(BaseModel):
+    """The six areas, for the caregiver's own patient.
+
+    A caregiver could not see any of this before: their dashboard reads the
+    device's own Dexie tables, which hold what THIS device played, not the
+    clinical picture the server assembles from every synced round. So the
+    person most likely to act on a flag was the one person who could not see
+    it. Same numbers as the doctor's card, plainer wording, no risk band --
+    a risk band is a clinical judgement and this is the family.
+    """
+    patient_id: int
+    patient_name: str
+    domains: list[DomainScore]
+    flagged_domains: list[FlaggedDomain] = Field(default_factory=list)
+    has_enough_data: bool = True
+    sittings_14d: int = 0
+    trend: Trend = "unknown"
 
 
 class PriorityItem(BaseModel):
@@ -297,6 +339,10 @@ class DoctorDashboardOut(BaseModel):
     priority: list[PriorityItem]
     patients: list[PatientCardOut]
     assistant: AssistantPanelOut
+    # The patient the board should land on: the one the priority strip leads
+    # with. Null for a caseload with nothing to flag, in which case the client
+    # highlights nobody rather than picking one arbitrarily.
+    focus_patient_id: int | None = None
 
 
 class TrendPoint(BaseModel):
@@ -315,6 +361,11 @@ class ClinicalViewOut(BaseModel):
     percentile: int | None
     adherence: int | None
     domains: list[DomainScore]
+    trend: Trend = "unknown"
+    risk: Literal["low", "medium", "high"] = "low"
+    has_enough_data: bool = True
+    sittings_14d: int = 0
+    flagged_domains: list[FlaggedDomain] = Field(default_factory=list)
     trend_30d: list[TrendPoint]
     difficulty_history: list[DifficultyHistoryOut]
     notes: list[ClinicalNoteOut]
