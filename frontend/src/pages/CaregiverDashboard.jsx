@@ -6,6 +6,7 @@ import {
   getPatient,
   listPatients,
   createPatient,
+  updatePatient,
   getRecentSessions,
   getLatestSessionForGame,
   listDifficultyState,
@@ -24,7 +25,8 @@ import {
 import { MAX_LEVEL, levelOrNull } from "@shared/levels";
 import { formatRelativeDay, describeSession } from "../lib/utils";
 import { SourceBadge } from "../components/ui/Badge";
-import { getMe, hydratePatientsFromServer } from "../lib/api";
+import { getMe, hydratePatientsFromServer, updatePatientRemote } from "../lib/api";
+import { LANGUAGE_OPTIONS } from "../lib/i18n";
 import {
   NAME_CIRCLE_OPTIONS,
   memoryGridLabel,
@@ -46,6 +48,7 @@ import {
   House,
   Gear,
   FirstAid,
+  Globe,
 } from "@phosphor-icons/react";
 
 const GAME_LABELS = {
@@ -637,6 +640,13 @@ function PatientDetailDashboard({
               </div>
             </section>
 
+            {/* Caregiver sets the patient's language here. Local Dexie write
+                first (works offline), then a best-effort push to the server
+                if this patient has already been synced (has a serverId). */}
+            <section className="area-language bg-white border border-neutral-200 rounded-xl px-5 py-5">
+              <LanguageCard patient={patient} onChanged={onReload} />
+            </section>
+
             <section className="area-memory bg-white border border-neutral-200 rounded-xl px-5 py-5">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
                 <FirstAid size={16} />
@@ -887,6 +897,70 @@ function AddPatientForm({ onCreated, onCancel }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Sets the language patient-facing screens speak and display in. Writes to
+ * the local Dexie patient row first (works offline, takes effect
+ * immediately), then best-effort pushes to the server if this patient has
+ * already been synced (has a serverId) — a failed remote push never blocks
+ * the local change.
+ */
+function LanguageCard({ patient, onChanged }) {
+  const [isSaving, setIsSaving] = useState(false);
+  const current = patient?.preferredLanguage || "en";
+  const currentOption = LANGUAGE_OPTIONS.find((opt) => opt.code === current);
+
+  const handleChange = async (event) => {
+    const preferredLanguage = event.target.value;
+    if (!patient?.id) return;
+
+    setIsSaving(true);
+    try {
+      await updatePatient(patient.id, { preferredLanguage });
+      if (patient.serverId) {
+        await updatePatientRemote(patient.serverId, {
+          preferred_language: preferredLanguage,
+        }).catch(() => {});
+      }
+      await onChanged();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
+        <Globe size={16} />
+        Language
+      </h2>
+      <p className="text-sm text-neutral-500 mb-3">
+        Games, greetings, and voice are spoken in this language on the
+        patient's device.
+      </p>
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={isSaving || !patient}
+        className="w-full rounded-lg border border-neutral-300 px-4 py-3 text-neutral-800
+          focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
+      >
+        {LANGUAGE_OPTIONS.map((opt) => (
+          <option key={opt.code} value={opt.code}>
+            {opt.label}
+            {opt.verified ? "" : " (not yet translated)"}
+          </option>
+        ))}
+      </select>
+      {currentOption && !currentOption.verified && (
+        <p className="text-xs text-amber-700 mt-2">
+          This language isn't translated yet — the patient will see English
+          text until it's reviewed.
+        </p>
+      )}
+    </>
   );
 }
 

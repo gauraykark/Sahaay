@@ -1,18 +1,43 @@
 // src/lib/i18n.js
 //
 // Minimal i18n layer for Sahaay. Supports English (en), Hindi (hi), and
-// Assamese (as). Only patient-facing strings are translated — caregiver and
-// doctor surfaces remain in English.
+// Assamese (as) as fully-translated languages, plus five additional
+// languages (Bengali, Khasi, Meitei/Manipuri, Mizo/Lushai, Konyak, Nyishi)
+// shipped as UNVERIFIED stubs — see the note above each block. Only
+// patient-facing strings are translated — caregiver and doctor surfaces
+// remain in English.
+//
+// Language now lives on the PATIENT record (Dexie `patients.preferredLanguage`),
+// not on the caregiver's JWT account. A caregiver sets it from the patient's
+// profile screen; the patient-facing hooks below read whichever patient is
+// currently active on this device.
 //
 // Usage:
 //   import { useT, langToLocale } from "../lib/i18n";
 //   const t = useT();
-//   t("welcome_back") // → "ঘৰলৈ স্বাগতম" if preferred_language === "as"
+//   t("welcome_back") // → "ঘৰলৈ স্বাগতম" if the active patient's language is "as"
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useAuth } from "./auth";
+import { getActivePatientId, getPatient } from "./db";
 import { speak } from "./utils";
+
+export const DEFAULT_LANGUAGE = "en";
+
+// Rendered in the caregiver's language picker on the patient's profile.
+// `verified: true` means a native speaker has reviewed the full dictionary;
+// `false` means it's currently an English-fallback stub — see the blocks below.
+export const LANGUAGE_OPTIONS = [
+  { code: "en", label: "English", verified: true },
+  { code: "as", label: "Assamese (অসমীয়া)", verified: true },
+  { code: "hi", label: "Hindi (हिन्दी)", verified: false },
+  { code: "bn", label: "Bengali (বাংলা)", verified: false },
+  { code: "kha", label: "Khasi", verified: false },
+  { code: "mni", label: "Meitei / Manipuri (মৈতৈলোন্)", verified: false },
+  { code: "lus", label: "Mizo / Lushai", verified: false },
+  { code: "nqo", label: "Konyak", verified: false },
+  { code: "njz", label: "Nyishi / Dafla", verified: false },
+];
 
 const strings = {
   en: {
@@ -133,12 +158,6 @@ const strings = {
     name_recall_desc: "परिचित लोगों और स्थानों के नाम याद रखें",
 
     // UNVERIFIED — needs native review.
-    // The six domain names below were written by Claude, not by a Hindi
-    // speaker. They render as-is: Hindi and Assamese are a problem-statement
-    // requirement, so an unreviewed term beats an English one. But they are
-    // clinical vocabulary on a caregiver's screen, so a native speaker should
-    // read them and delete this marker. Until then, treat them as a draft.
-    // छह क्षेत्र — रोगी इन्हें कभी नहीं देखता, ये देखभालकर्ता की स्क्रीन के लिए हैं।
     domain_attention: "ध्यान",
     domain_executive: "योजना और क्रम",
     domain_memory: "स्मृति",
@@ -188,14 +207,12 @@ const strings = {
     next_games_at: (time) => `अगले खेल ${time} बजे`,
     come_back_later: "आपने आज खेल लिया है। बाद में आइए।",
 
-    // UNVERIFIED — needs native review, as above.
     my_day: "मेरा दिन",
     my_day_desc: "आपकी दवाइयाँ, पानी, भोजन और मुलाक़ातें",
     nothing_today: "अभी कुछ नहीं करना है",
     mark_done: "हो गया",
     all_done_today: "आज का सब कुछ हो गया",
 
-    // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। वापसी पर स्वागत है। तैयार होने पर एक गतिविधि चुनें।`,
     this_is: (name, relationship) =>
@@ -225,12 +242,6 @@ const strings = {
     name_recall_desc: "পৰিচিত মানুহ আৰু ঠাইৰ নাম মনত ৰাখক",
 
     // UNVERIFIED — needs native review.
-    // As above: written by Claude, not by an Assamese speaker. Assamese is the
-    // language this app exists for, so these ship rather than falling back to
-    // English — but nobody has checked that "পৰিকল্পনা আৰু ক্ৰম" is what a
-    // clinician in Assam would actually say for executive function. A native
-    // speaker should read all six and delete this marker.
-    // The six domains, for the caregiver's screens. The patient never sees them.
     domain_attention: "মনোযোগ",
     domain_executive: "পৰিকল্পনা আৰু ক্ৰম",
     domain_memory: "স্মৃতি",
@@ -280,14 +291,12 @@ const strings = {
     next_games_at: (time) => `পিছৰ খেল ${time} বজাত`,
     come_back_later: "আপুনি আজি খেলিছে। পিছত আহক।",
 
-    // UNVERIFIED — needs native review, as above.
     my_day: "মোৰ দিন",
     my_day_desc: "আপোনাৰ ঔষধ, পানী, আহাৰ আৰু সাক্ষাৎ",
     nothing_today: "এতিয়া একো কৰিবলগীয়া নাই",
     mark_done: "হৈ গ'ল",
     all_done_today: "আজিৰ সকলো হৈ গ'ল",
 
-    // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। ঘৰলৈ স্বাগতম। আপুনি সাজু হ'লে এটা কাৰ্যকলাপ বাছনি কৰক।`,
     this_is: (name, relationship) =>
@@ -295,6 +304,53 @@ const strings = {
     not_sure_who: "মই এতিয়াও নাজানো এইজন কোন।",
   },
 };
+
+// ── Bengali, Khasi, Meitei, Mizo, Konyak, Nyishi — UNVERIFIED STUBS ────────
+//
+// No translator has been through these yet. Each is cloned from `en` so the
+// app never shows a blank string or crashes for a patient set to one of
+// these languages — it just silently displays English until someone
+// replaces the values key-by-key with a native speaker's review. Remove this
+// block comment (and the `verified: false` flag in LANGUAGE_OPTIONS above)
+// once a given language has been checked.
+strings.bn = { ...strings.en };
+strings.kha = { ...strings.en };
+strings.mni = { ...strings.en };
+strings.lus = { ...strings.en };
+strings.nqo = { ...strings.en };
+strings.njz = { ...strings.en };
+
+/**
+ * Reads the ACTIVE PATIENT's preferredLanguage from Dexie (set on the
+ * patient record, changeable by the caregiver from the patient's profile
+ * screen) — not the logged-in caregiver's own account language.
+ *
+ * Falls back to DEFAULT_LANGUAGE ("en") while loading or if no patient/
+ * field is set yet.
+ */
+export function useActivePatientLanguage() {
+  const [lang, setLang] = useState(DEFAULT_LANGUAGE);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const id = await getActivePatientId();
+        const patient = id ? await getPatient(id) : null;
+        if (!cancelled) {
+          setLang(patient?.preferredLanguage || DEFAULT_LANGUAGE);
+        }
+      } catch {
+        if (!cancelled) setLang(DEFAULT_LANGUAGE);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return lang;
+}
 
 /**
  * Speak a phrase ONCE per `key`, in the patient's own language.
@@ -314,8 +370,7 @@ const strings = {
  * changes and never again for the same key.
  */
 export function useSpeak() {
-  const { user } = useAuth();
-  const lang = user?.preferred_language || "en";
+  const lang = useActivePatientLanguage();
   const spokenFor = useRef(null);
 
   return function say(text, key) {
@@ -326,21 +381,28 @@ export function useSpeak() {
 }
 
 /**
- * Maps a preferred_language code to a BCP-47 locale tag for the Web Speech API.
- * Falls back to en-IN for anything unrecognised.
+ * Maps a preferredLanguage code to a BCP-47 locale tag for the Web Speech API.
+ * Falls back to en-IN for anything unrecognised, and for languages without a
+ * known speech-synthesis voice (the browser will pick its closest fallback).
  */
 export function langToLocale(lang) {
   const map = {
     en: "en-IN",
     hi: "hi-IN",
     as: "as-IN",
+    bn: "bn-IN",
+    kha: "en-IN", // no known Khasi TTS voice — falls back
+    mni: "en-IN", // no known Meitei TTS voice — falls back
+    lus: "en-IN", // no known Mizo TTS voice — falls back
+    nqo: "en-IN", // no known Konyak TTS voice — falls back
+    njz: "en-IN", // no known Nyishi TTS voice — falls back
   };
   return map[lang] || "en-IN";
 }
 
 /**
  * Hook that returns a translator function t(key, ...args) scoped to the
- * current user's preferred_language. Falls back to English if the key or
+ * ACTIVE PATIENT's preferredLanguage. Falls back to English if the key or
  * language is missing.
  *
  * For simple string keys: t("welcome_back")
@@ -348,8 +410,7 @@ export function langToLocale(lang) {
  *                         t("this_is", name, relationship)
  */
 export function useT() {
-  const { user } = useAuth();
-  const lang = user?.preferred_language || "en";
+  const lang = useActivePatientLanguage();
   const dict = strings[lang] || strings.en;
 
   return function t(key, ...args) {

@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { speak } from "../lib/utils";
 import { isPreviewMode, setPreviewMode } from "../lib/db";
-import { useAuth } from "../lib/auth";
-import { useT, langToLocale } from "../lib/i18n";
+import { useT, langToLocale, useActivePatientLanguage } from "../lib/i18n";
 import {
   SignOut,
   Heart,
@@ -13,9 +12,9 @@ import {
 const GREETED_KEY = "sahaay-greeted";
 
 export default function PatientHome() {
-  const { user } = useAuth();
   const t = useT();
-  const locale = langToLocale(user?.preferred_language || "en");
+  const patientLang = useActivePatientLanguage();
+  const locale = langToLocale(patientLang);
 
   const [greeting] = useState(() => {
     const hour = new Date().getHours();
@@ -48,9 +47,6 @@ export default function PatientHome() {
     // set, so the greeting is silently lost rather than repeated.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [greeting, locale]);
-
-  useEffect(() => {
-  }, []);
 
   return (
     <div className="min-h-screen bg-background">

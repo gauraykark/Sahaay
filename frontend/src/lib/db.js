@@ -230,6 +230,7 @@ export async function ensureDemoPatient() {
     name: DEMO_PATIENT_NAME,
     isDemo: 1,
     photo: null,
+    preferredLanguage: "en", // NEW
     createdAt: new Date().toISOString(),
   });
   return id;
@@ -255,6 +256,9 @@ export async function setActivePatientId(patientId) {
  * the caregiver creates the profile, the patient later just taps their
  * own name/photo to continue — no PIN or typing required on their side.
  *
+ * `preferredLanguage` defaults to English ("en") and can be changed later
+ * from the caregiver's patient profile screen via updatePatient().
+ *
  * @param {string} name
  * @param {string|null} [photo] - optional base64 data URL
  */
@@ -263,6 +267,7 @@ export async function createPatient(name, photo = null) {
     name,
     isDemo: 0,
     photo,
+    preferredLanguage: "en", // NEW — default; caregiver can change per-patient later
     createdAt: new Date().toISOString(),
   });
   return id;

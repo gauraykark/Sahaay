@@ -13,13 +13,12 @@ import {
   supportsVoiceInput,
   extractNameFromQuestion,
 } from "../lib/utils";
-import { useAuth } from "../lib/auth";
-import { useT, langToLocale } from "../lib/i18n";
+import { useT, langToLocale, useActivePatientLanguage } from "../lib/i18n";
 
 export default function MemoryVault() {
-  const { user } = useAuth();
   const t = useT();
-  const locale = langToLocale(user?.preferred_language || "en");
+  const patientLang = useActivePatientLanguage();
+  const locale = langToLocale(patientLang);
 
   const [people, setPeople] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
