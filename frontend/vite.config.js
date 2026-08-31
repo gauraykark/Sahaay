@@ -10,11 +10,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // That directory sits outside the Vite root, so it needs both an alias and an
 // explicit fs.allow entry to be served in dev.
 const sharedDir = fileURLToPath(new URL('../shared', import.meta.url))
+const srcDir = fileURLToPath(new URL('./src', import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
   resolve: {
     alias: {
+      '@': srcDir,
       '@shared': sharedDir,
     },
   },

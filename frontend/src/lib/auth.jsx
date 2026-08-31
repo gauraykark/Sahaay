@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // Auth state and route guards.
 //
 // The server is the security boundary — every endpoint checks the role on the

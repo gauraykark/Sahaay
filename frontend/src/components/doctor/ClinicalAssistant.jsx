@@ -49,7 +49,7 @@ export default function ClinicalAssistant({
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionCard>
+      <SectionCard className="panel-card bg-card">
         <SectionHeading icon={TrendUp}>Improving this week</SectionHeading>
         {improving.length ? (
           <ul className="space-y-1">
@@ -66,7 +66,7 @@ export default function ClinicalAssistant({
         )}
       </SectionCard>
 
-      <SectionCard>
+      <SectionCard className="panel-card bg-card">
         <SectionHeading icon={TrendDown}>Sudden drop</SectionHeading>
         {sudden_drop.length ? (
           <ul className="space-y-1">
@@ -83,20 +83,19 @@ export default function ClinicalAssistant({
         )}
       </SectionCard>
 
-      <SectionCard>
+      <SectionCard className="panel-card bg-card">
         <SectionHeading icon={ArrowsClockwise}>Difficulty changes today</SectionHeading>
         {difficulty_changes_today.length ? (
           <ul className="space-y-2.5">
             {difficulty_changes_today.map((change) => (
               <li key={change.id} className="text-sm">
-                <span className="text-neutral-800">
-                  {change.game_type.replace("-", " ")}: level {change.from_level} →{" "}
-                  {change.to_level}
+                <span className="text-foreground">
+                  {change.game_type.replace("-", " ")}: level {change.from_level} → {change.to_level}
                 </span>
                 {change.reason ? (
-                  <span className="block text-xs text-neutral-500">{change.reason}</span>
+                  <span className="block text-xs text-muted-foreground">{change.reason}</span>
                 ) : null}
-                <span className="block text-xs text-neutral-400">
+                <span className="block text-xs text-muted-foreground/80">
                   {change.source === "ai" ? "Decided by AI" : "Decided offline by rules"}
                 </span>
               </li>
@@ -111,7 +110,7 @@ export default function ClinicalAssistant({
         icon={FileText}
         onClick={onGenerateReport}
         disabled={isGenerating}
-        className="w-full"
+        className="w-full accent-btn"
       >
         {isGenerating ? "Generating…" : "Generate weekly clinical report"}
       </Button>

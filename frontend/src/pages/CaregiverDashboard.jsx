@@ -326,18 +326,18 @@ function CaregiverDashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="px-5 pt-6 pb-5 border-b border-neutral-200">
-        <div className="flex items-center justify-between">
+    <div className="caregiver-theme min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card/80">
+        <div className="mx-auto max-w-6xl px-5 pt-6 pb-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-neutral-500">Caregiver</p>
-            <h1 className="text-xl font-medium text-neutral-800 mt-0.5">
+            <p className="text-sm text-muted-foreground">Caregiver</p>
+            <h1 className="text-2xl font-semibold text-foreground mt-0.5 tracking-tight">
               Welcome{caregiverName ? `, ${caregiverName}` : ", caregiver"}
             </h1>
           </div>
           <Link
             to="/login"
-            className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700"
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <SignOut size={18} weight="regular" />
             Exit
@@ -345,9 +345,9 @@ function CaregiverDashboardContent() {
         </div>
       </header>
 
-      <main className="px-5 py-8 max-w-2xl">
+      <main className="mx-auto max-w-6xl px-5 py-8">
         <section className="mb-10">
-          <h2 className="text-sm font-medium text-neutral-500 mb-3">
+          <h2 className="text-sm font-medium text-muted-foreground mb-3">
             Your tools
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -375,11 +375,11 @@ function CaregiverDashboardContent() {
         </section>
 
         <section className="mb-8">
-          <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
+          <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-3">
             <Users size={16} weight="regular" />
             Patient accounts
           </h2>
-          <p className="text-sm text-neutral-500 mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             Open a patient to see how they are performing.
           </p>
 
@@ -388,18 +388,18 @@ function CaregiverDashboardContent() {
               <button
                 key={patient.id}
                 onClick={() => handleOpenPatient(patient.id)}
-                className="flex items-center gap-3 w-full text-left bg-white border border-neutral-200 hover:border-primary-300 rounded-lg px-5 py-4 transition-colors"
+                className="flex items-center gap-3 w-full text-left bg-card border border-border hover:border-ring rounded-xl px-5 py-4 transition-colors"
               >
                 <Avatar patient={patient} />
                 <div className="flex-1">
-                  <p className="font-medium text-neutral-800">{patient.name}</p>
-                  <p className="text-sm text-neutral-500">Open dashboard</p>
+                  <p className="font-medium text-foreground">{patient.name}</p>
+                  <p className="text-sm text-muted-foreground">Open dashboard</p>
                 </div>
               </button>
             ))}
 
             {patients.length === 0 && !showAddForm && (
-              <p className="text-sm text-neutral-500 bg-white border border-neutral-200 rounded-lg px-5 py-4">
+              <p className="text-sm text-muted-foreground bg-card border border-border rounded-xl px-5 py-4">
                 No patients yet. Add one below to start tracking games and
                 memory.
               </p>
@@ -408,14 +408,14 @@ function CaregiverDashboardContent() {
         </section>
 
         <section>
-          <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
+          <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground mb-3">
             <Plus size={16} weight="regular" />
             Add a patient
           </h2>
           {!showAddForm ? (
             <button
               onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 w-full justify-center text-sm text-primary-700 border border-dashed border-neutral-300 hover:border-primary-300 rounded-lg px-5 py-3.5 transition-colors"
+              className="flex items-center gap-2 w-full justify-center text-sm text-primary border border-dashed border-border hover:border-ring rounded-xl px-5 py-3.5 transition-colors bg-card"
             >
               <Plus size={18} weight="regular" />
               Add a patient
@@ -434,7 +434,7 @@ function CaregiverDashboardContent() {
 
 function CaregiverTool({ icon, title, detail, to, onClick }) {
   const className =
-    "flex flex-col gap-2 bg-white border border-neutral-200 hover:border-primary-300 rounded-lg px-4 py-4 text-left transition-colors h-full";
+    "flex flex-col gap-2 bg-card border border-border hover:border-ring rounded-xl px-4 py-4 text-left transition-colors h-full";
 
   const inner = (
     <>
@@ -907,37 +907,10 @@ function AddPatientForm({ onCreated, onCancel }) {
  * already been synced (has a serverId) — a failed remote push never blocks
  * the local change.
  */
-/**
- * Sets the language patient-facing screens speak and display in. Writes to
- * the local Dexie patient row first (works offline, takes effect
- * immediately), then best-effort pushes to the server if this patient has
- * already been synced (has a serverId) — a failed remote push never blocks
- * the local change.
- */
-const STATUS_META = {
-  verified: { dot: "bg-green-500", suffix: "", note: null },
-  review: {
-    dot: "bg-amber-500",
-    suffix: " (needs review)",
-    note: "Translated, but not yet checked by a native speaker.",
-  },
-  draft: {
-    dot: "bg-amber-500",
-    suffix: " (draft, low confidence)",
-    note: "An early-pass translation — some phrasing may be inaccurate. Needs native review before relying on it.",
-  },
-  untranslated: {
-    dot: "bg-neutral-300",
-    suffix: " (not yet translated)",
-    note: "This language isn't translated yet — the patient will see English text until it's added.",
-  },
-};
 
 function LanguageCard({ patient, onChanged }) {
   const [isSaving, setIsSaving] = useState(false);
   const current = patient?.preferredLanguage || "en";
-  const currentOption = LANGUAGE_OPTIONS.find((opt) => opt.code === current);
-  const currentMeta = STATUS_META[currentOption?.status] || STATUS_META.untranslated;
 
   const handleChange = async (event) => {
     const preferredLanguage = event.target.value;
@@ -967,31 +940,19 @@ function LanguageCard({ patient, onChanged }) {
         Games, greetings, and voice are spoken in this language on the
         patient's device.
       </p>
-
-      <div className="relative">
-        <span
-          className={`absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${currentMeta.dot}`}
-          aria-hidden="true"
-        />
-        <select
-          value={current}
-          onChange={handleChange}
-          disabled={isSaving || !patient}
-          className="w-full rounded-lg border border-neutral-300 pl-8 pr-4 py-3 text-neutral-800
-            focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
-        >
-          {LANGUAGE_OPTIONS.map((opt) => (
-            <option key={opt.code} value={opt.code}>
-              {opt.label}
-              {STATUS_META[opt.status]?.suffix || ""}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {currentMeta.note && (
-        <p className="text-xs text-amber-700 mt-2">{currentMeta.note}</p>
-      )}
+      <select
+        value={current}
+        onChange={handleChange}
+        disabled={isSaving || !patient}
+        className="w-full rounded-lg border border-neutral-300 px-4 py-3 text-neutral-800
+          focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
+      >
+        {LANGUAGE_OPTIONS.map((opt) => (
+          <option key={opt.code} value={opt.code}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </>
   );
 }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Sahaay — Offline-First Cognitive Care for Dementia Patients
 
 **SIH 2026 · Problem Statement SIH26003 · North Eastern Region**
@@ -330,3 +331,6 @@ The doctor dashboard uses no LLM on page load. Trend direction, domain scores, r
 ## Acknowledgements
 
 Built for Smart India Hackathon 2026, Problem Statement SIH26003 — *AI/ML-based dementia support application for the North Eastern Region*.
+=======
+# Sahaay
+>>>>>>> origin/main

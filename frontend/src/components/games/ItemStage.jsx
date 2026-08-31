@@ -60,11 +60,11 @@ export default function ItemStage({ item, onDone }) {
       say(t("lets_look_together"), `correct-${item.id}`);
       setTimeout(finish, CORRECTION_MS);
     },
-    [correcting, item, onDone, t]
+    [correcting, item, onDone, say, t]
   );
 
   const Renderer = RENDERERS[item.template];
   if (!Renderer) return null;
 
-  return <Renderer item={item} t={t} correcting={correcting} onAnswer={answer} />;
+  return <Renderer key={item.id} item={item} t={t} correcting={correcting} onAnswer={answer} />;
 }

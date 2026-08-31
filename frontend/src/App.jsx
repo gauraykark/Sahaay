@@ -41,7 +41,14 @@ function App() {
 
           {/* CAREGIVER — the PIN gate lives inside the component and stays as
               a local convenience lock. The server still checks the role. */}
-          <Route path="/caregiver" element={<CaregiverDashboard />} />
+          <Route
+            path="/caregiver"
+            element={
+              <div className="caregiver-theme">
+                <CaregiverDashboard />
+              </div>
+            }
+          />
 
           {/* DOCTOR — reads other people's patients, so it is guarded on both
               sides: this wrapper for navigation, require_role on every
@@ -50,7 +57,9 @@ function App() {
             path="/doctor"
             element={
               <RequireRole roles={["doctor"]}>
-                <DoctorDashboard />
+                <div className="doctor-theme">
+                  <DoctorDashboard />
+                </div>
               </RequireRole>
             }
           />
@@ -58,7 +67,9 @@ function App() {
             path="/doctor/patient/:patientId"
             element={
               <RequireRole roles={["doctor"]}>
-                <PatientClinicalView />
+                <div className="doctor-theme">
+                  <PatientClinicalView />
+                </div>
               </RequireRole>
             }
           />

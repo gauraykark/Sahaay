@@ -19,12 +19,12 @@ const SEVERITY_DOT = {
 export default function PriorityStrip({ items, onOpenPatient }) {
   if (!items?.length) {
     return (
-      <section className="bg-white border border-neutral-200 rounded-xl px-5 py-4">
-        <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500">
+      <section className="panel-card bg-card px-5 py-4">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
           <Warning size={16} weight="regular" />
           Today's priority
         </h2>
-        <p className="mt-2 text-neutral-600">
+        <p className="mt-2 text-sm text-muted-foreground">
           Nothing needs attention today. All patients are stable or improving.
         </p>
       </section>
@@ -32,11 +32,11 @@ export default function PriorityStrip({ items, onOpenPatient }) {
   }
 
   return (
-    <section className="bg-white border border-neutral-200 rounded-xl px-5 py-4">
-      <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500">
+    <section className="panel-card bg-card px-5 py-4">
+      <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
         <Warning size={16} weight="regular" />
         Today's priority
-        <span className="text-neutral-400 font-normal">
+        <span className="text-muted-foreground font-normal">
           · {items.length} {items.length === 1 ? "patient needs" : "patients need"} attention
         </span>
       </h2>
@@ -47,28 +47,26 @@ export default function PriorityStrip({ items, onOpenPatient }) {
             <button
               type="button"
               onClick={() => onOpenPatient(item.patient_id)}
-              className="group w-full text-left flex items-start gap-2.5 rounded-lg border
-                border-neutral-200 hover:border-primary-300 px-3.5 py-3 transition-colors
-                focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+              className="group w-full text-left flex items-start gap-2.5 rounded-xl border border-border bg-card hover:border-ring px-3.5 py-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <span
-                className={`mt-2 w-2 h-2 rounded-full shrink-0 ${
+                className={`mt-2 w-2.5 h-2.5 rounded-full shrink-0 ${
                   SEVERITY_DOT[item.severity] ?? SEVERITY_DOT.low
                 }`}
                 aria-hidden="true"
               />
               <span className="min-w-0 flex-1">
-                <span className="block font-medium text-neutral-800 truncate">
+                <span className="block font-medium text-foreground truncate">
                   {item.patient_name}
                 </span>
-                <span className="block text-sm text-neutral-600">{item.headline}</span>
-                <span className="block text-xs text-neutral-500 mt-0.5">
+                <span className="block text-sm text-muted-foreground">{item.headline}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
                   {item.reason}
                 </span>
               </span>
               <ArrowRight
                 size={16}
-                className="mt-1 shrink-0 text-neutral-300 group-hover:text-primary-600 transition-colors"
+                className="mt-1 shrink-0 text-muted-foreground group-hover:text-primary transition-colors"
               />
             </button>
           </li>

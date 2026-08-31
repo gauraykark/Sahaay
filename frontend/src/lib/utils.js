@@ -3,7 +3,13 @@
 // Small, pure, shared helpers used across pages and games. Kept dependency-free
 // and framework-agnostic so they're easy to test and reuse.
 
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 import { MAX_LEVEL, MIN_LEVEL } from "@shared/levels";
+
+export function cn(...inputs) {
+  return twMerge(clsx(inputs));
+}
 
 /** Time-of-day greeting used on Patient Home and in the voice greeting. */
 export function getGreeting(date = new Date()) {

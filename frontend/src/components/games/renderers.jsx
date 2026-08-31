@@ -84,7 +84,6 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
   const say = useSpeak();
 
   useEffect(() => {
-    setStage("show");
     say(t("remember_these"), `${item.id}-show`);
     const a = setTimeout(() => setStage("gap"), item.show.durationMs);
     const b = setTimeout(
@@ -233,13 +232,12 @@ function HowAreTheyFeeling({ item, t, correcting, onAnswer }) {
 
 function PutInOrder({ item, t, correcting, onAnswer }) {
   const say = useSpeak();
-  const [placed, setPlaced] = useState([]);
+  const [placed, setPlaced] = useState(() => item.correctOrder.slice(0, item.prePlaced));
   const [hint, setHint] = useState(false);
   const tapsRef = useRef(0);
   const reportedRef = useRef(false);
 
   useEffect(() => {
-    setPlaced(item.correctOrder.slice(0, item.prePlaced));
     tapsRef.current = 0;
     reportedRef.current = false;
     say(t("ask_put_in_order"), item.id);
@@ -411,8 +409,6 @@ function GoNoGo({ item, t, onAnswer }) {
   useEffect(() => {
     hitsRef.current = { correct: 0, total: 0 };
     doneRef.current = false;
-    setStep(0);
-    setAck(false);
     // item.promptKey, not a literal: the generator emits no red stimulus
     // below level 3, and the instruction has to say so.
     say(t(item.promptKey), item.id);

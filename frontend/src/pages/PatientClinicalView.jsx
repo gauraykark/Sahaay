@@ -63,7 +63,7 @@ export default function PatientClinicalView() {
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const load = async () => {
+  const loadData = useCallback(async () => {
     try {
       const payload = await fetchClinicalView(patientId);
       setData(payload);
@@ -72,12 +72,26 @@ export default function PatientClinicalView() {
       setError(err.message || "Could not load this patient.");
       setStatus("error");
     }
-  };
+  }, [patientId]);
 
   useEffect(() => {
-    setStatus("loading");
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+
+    fetchClinicalView(patientId)
+      .then((payload) => {
+        if (cancelled) return;
+        setData(payload);
+        setStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err.message || "Could not load this patient.");
+        setStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [patientId]);
 
   const handleSaveNote = async (event) => {
@@ -92,7 +106,7 @@ export default function PatientClinicalView() {
       });
       setNoteBody("");
       setNeedsFollowup(false);
-      await load();
+      await loadData();
     } catch (err) {
       setError(err.message || "Could not save the note.");
     } finally {
@@ -108,7 +122,7 @@ export default function PatientClinicalView() {
         audience: "doctor",
         periodDays: 30,
       });
-      await load();
+      await loadData();
     } catch (err) {
       setError(err.message || "Could not generate the summary.");
     } finally {

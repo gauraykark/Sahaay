@@ -24,14 +24,13 @@ export default function MemoryVault() {
   const [isLoading, setIsLoading] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [lastAnswer, setLastAnswer] = useState(null);
-  const [voiceAvailable, setVoiceAvailable] = useState(false);
+  const [voiceAvailable] = useState(() => supportsVoiceInput());
 
   useEffect(() => {
     listVaultPeople().then((rows) => {
       setPeople(rows);
       setIsLoading(false);
     });
-    setVoiceAvailable(supportsVoiceInput());
   }, []);
 
   const announcePerson = (person) => {

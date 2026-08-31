@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 // Buttons.
 //
 // Three variants, no more. Primary is the app's green — one per screen area,
@@ -29,10 +31,12 @@ export default function Button({
 }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-1.5 font-medium
-        transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600
-        ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={cn(
+        "inline-flex items-center justify-center gap-1.5 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600",
+        VARIANTS[variant],
+        SIZES[size],
+        className,
+      )}
       {...rest}
     >
       {Icon ? <Icon size={size === "sm" ? 15 : 18} weight="regular" /> : null}

@@ -80,7 +80,8 @@ export default function DoctorDashboard() {
     };
   }, []);
 
-  const patients = data?.patients ?? [];
+  const rawPatients = data?.patients;
+  const patients = useMemo(() => rawPatients ?? [], [rawPatients]);
 
   const counts = useMemo(() => {
     const result = {};
@@ -127,9 +128,9 @@ export default function DoctorDashboard() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="doctor-theme min-h-screen bg-background">
         <div className="px-5 py-8 max-w-7xl mx-auto">
-          <p className="text-neutral-400">Loading your patients…</p>
+          <p className="text-muted-foreground">Loading your patients…</p>
         </div>
       </div>
     );
@@ -137,14 +138,14 @@ export default function DoctorDashboard() {
 
   if (status === "error") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="doctor-theme min-h-screen bg-background">
         <div className="px-5 py-8 max-w-2xl mx-auto">
-          <SectionCard>
-            <h1 className="font-medium text-neutral-800 text-lg">
+          <SectionCard className="panel-card border-border bg-card">
+            <h1 className="font-medium text-foreground text-lg">
               Could not load your patients
             </h1>
-            <p className="mt-1 text-neutral-600">{error}</p>
-            <p className="mt-3 text-sm text-neutral-500">
+            <p className="mt-1 text-muted-foreground">{error}</p>
+            <p className="mt-3 text-sm text-muted-foreground">
               Check that the backend is running, then reload this page.
             </p>
           </SectionCard>
@@ -154,23 +155,23 @@ export default function DoctorDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="doctor-theme min-h-screen bg-background text-foreground">
       {/* ── Top header ───────────────────────────────────────────────── */}
-      <header className="px-5 pt-6 pb-5 border-b border-neutral-200 bg-white">
-        <div className="max-w-7xl mx-auto">
+      <header className="border-b border-border bg-card/80">
+        <div className="max-w-7xl mx-auto px-5 pt-6 pb-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm text-neutral-500">Doctor</p>
-              <h1 className="text-xl font-medium text-neutral-800 mt-0.5">
+              <p className="text-sm text-muted-foreground">Doctor</p>
+              <h1 className="text-2xl font-semibold text-foreground mt-0.5 tracking-tight">
                 {data.doctor_name}
                 {data.designation ? (
-                  <span className="text-neutral-500 font-normal">
+                  <span className="text-muted-foreground font-normal">
                     {" "}
                     · {data.designation}
                   </span>
                 ) : null}
               </h1>
-              <p className="flex items-center gap-1.5 text-sm text-neutral-500 mt-1">
+              <p className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
                 <Users size={15} weight="regular" />
                 {data.total_patients} patient
                 {data.total_patients === 1 ? "" : "s"} under your care
@@ -182,16 +183,14 @@ export default function DoctorDashboard() {
                 <span className="sr-only">Search patients</span>
                 <MagnifyingGlass
                   size={17}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
                 />
                 <input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search by patient or caregiver"
-                  className="w-64 rounded-lg border border-neutral-200 bg-white
-                    pl-9 pr-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400
-                    focus:border-primary-300 focus:outline-none transition-colors"
+                  className="w-64 rounded-xl border border-border bg-card pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none transition-colors"
                 />
               </label>
 
@@ -201,7 +200,7 @@ export default function DoctorDashboard() {
                   signOut();
                   navigate("/login");
                 }}
-                className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <SignOut size={18} weight="regular" />
                 Sign out
@@ -209,7 +208,7 @@ export default function DoctorDashboard() {
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5">
             <FilterChips
               options={FILTERS.map((option) => ({
                 ...option,
