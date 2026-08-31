@@ -1,32 +1,15 @@
-// Six renderers, one per item template. Thin on purpose: GameShell owns the
-// round, the logging, the abandon path and the errorless behaviour, so a
-// renderer only draws the question and reports whether a tap was correct.
+// Six renderers, one per item template.
 //
-// Rules every renderer follows, from the interface section of the spec:
+// Rules every renderer follows:
 //   * tap only -- no drag, no swipe, no pinch. Tremor is common.
 //   * big targets, big text, high contrast, no thin fonts.
 //   * one thing on screen at a time.
-//   * nothing that reads as failure: no red, no X, no counter, no score.
-//   * `correcting` means "show the right answer gently" -- never "you were
-//     wrong". The correct option lifts; the patient's pick is left alone.
+//   * clear persistent green border on right option with Next button.
+//   * gentle retry option on mistake so the patient can try again.
 
 import { useEffect, useRef, useState } from "react";
 
 import { useSpeak } from "../../lib/i18n";
-
-// Ignore a second tap inside this window. Accidental double-taps are common
-// and would otherwise answer the next question too.
-const DEBOUNCE_MS = 600;
-
-function useDebouncedAnswer(onAnswer) {
-  const lastRef = useRef(0);
-  return (correct) => {
-    const now = Date.now();
-    if (now - lastRef.current < DEBOUNCE_MS) return;
-    lastRef.current = now;
-    onAnswer(correct);
-  };
-}
 
 function Prompt({ children }) {
   return (
@@ -36,38 +19,83 @@ function Prompt({ children }) {
   );
 }
 
-/** A large tappable word. `lift` marks the correct one during a correction. */
-function WordButton({ label, onClick, lift }) {
+function QuestionFeedback({ status, onNext, onRetry, t }) {
+  if (status === "correct") {
+    return (
+      <div className="mt-8 flex flex-col items-center gap-3">
+        <button
+          type="button"
+          onClick={onNext}
+          className="px-10 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-2xl font-medium shadow-lg transition-all flex items-center gap-3 cursor-pointer"
+        >
+          <span>{t("next")}</span>
+          <span className="text-2xl font-bold leading-none">→</span>
+        </button>
+      </div>
+    );
+  }
+  if (status === "wrong") {
+    return (
+      <div className="mt-8 flex flex-col items-center gap-3">
+        <p className="text-xl text-neutral-600 font-medium">
+          {t("lets_look_together")}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="px-8 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xl font-medium shadow-md transition-all flex items-center gap-2.5 cursor-pointer"
+        >
+          <span className="text-xl font-bold">↻</span>
+          <span>{t("retry")}</span>
+        </button>
+      </div>
+    );
+  }
+  return null;
+}
+
+/** A large tappable word. */
+function WordButton({ label, onClick, selectedState, lift, disabled }) {
+  let borderClasses = "border-2 border-neutral-300 bg-white text-neutral-800 hover:border-neutral-400";
+  if (selectedState === "correct" || lift) {
+    borderClasses = "border-4 border-emerald-500 bg-emerald-50 text-emerald-950 scale-105 shadow-md ring-4 ring-emerald-200/60 font-semibold";
+  } else if (selectedState === "wrong") {
+    borderClasses = "border-4 border-amber-500 bg-amber-50 text-amber-950 scale-100 ring-4 ring-amber-200/50";
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-8 py-6 rounded-2xl border-2 text-2xl font-medium transition-transform ${
-        lift
-          ? "border-primary-500 bg-teal-50 text-neutral-900 scale-105"
-          : "border-neutral-300 bg-white text-neutral-800"
-      }`}
+      disabled={disabled}
+      className={`px-8 py-6 rounded-2xl text-2xl font-medium transition-all duration-200 cursor-pointer ${borderClasses}`}
     >
       {label}
     </button>
   );
 }
 
-function PictureButton({ src, label, onClick, lift }) {
+function PictureButton({ src, label, onClick, selectedState, lift, disabled }) {
+  let borderClasses = "border-2 border-neutral-300 bg-white hover:border-neutral-400";
+  if (selectedState === "correct" || lift) {
+    borderClasses = "border-4 border-emerald-500 bg-emerald-50 scale-105 shadow-md ring-4 ring-emerald-200/60 font-semibold";
+  } else if (selectedState === "wrong") {
+    borderClasses = "border-4 border-amber-500 bg-amber-50 ring-4 ring-amber-200/50";
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`p-2 rounded-2xl border-2 transition-transform ${
-        lift ? "border-primary-500 bg-teal-50 scale-105" : "border-neutral-300 bg-white"
-      }`}
+      disabled={disabled}
+      className={`p-2 rounded-2xl transition-all duration-200 flex flex-col items-center cursor-pointer ${borderClasses}`}
     >
       <img
         src={src}
         alt=""
         className="w-36 h-36 md:w-44 md:h-44 object-cover rounded-xl"
       />
-      <span className="block mt-2 text-xl text-neutral-800">{label}</span>
+      <span className="block mt-2 text-xl text-neutral-800 font-medium">{label}</span>
     </button>
   );
 }
@@ -80,10 +108,16 @@ const shapeLabel = (t, key) => t(`shape_${key}`);
 
 function WhichDidYouSee({ item, t, correcting, onAnswer }) {
   const [stage, setStage] = useState("show");
-  const answer = useDebouncedAnswer(onAnswer);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState(null);
+  const firstAttemptCorrectRef = useRef(true);
   const say = useSpeak();
 
   useEffect(() => {
+    setStage("show");
+    setSelected(null);
+    setStatus(null);
+    firstAttemptCorrectRef.current = true;
     say(t("remember_these"), `${item.id}-show`);
     const a = setTimeout(() => setStage("gap"), item.show.durationMs);
     const b = setTimeout(
@@ -99,6 +133,29 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
+
+  const handleSelect = (key) => {
+    if (status === "correct") return;
+    const isRight = key === item.ask.correct;
+    setSelected(key);
+    if (isRight) {
+      setStatus("correct");
+      say(t("thats_it"), `${item.id}-correct`);
+    } else {
+      setStatus("wrong");
+      firstAttemptCorrectRef.current = false;
+      say(t("lets_look_together"), `${item.id}-retry`);
+    }
+  };
+
+  const handleRetry = () => {
+    setSelected(null);
+    setStatus(null);
+  };
+
+  const handleNext = () => {
+    onAnswer(firstAttemptCorrectRef.current);
+  };
 
   if (stage === "show") {
     return (
@@ -119,7 +176,6 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
   }
 
   if (stage === "gap") {
-    // A blank, calm pause. Nothing to read, nothing counting down.
     return <div className="w-24 h-24 rounded-full bg-neutral-200" />;
   }
 
@@ -127,16 +183,28 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
     <>
       <Prompt>{t("ask_which_did_you_see")}</Prompt>
       <div className="flex flex-wrap gap-5 justify-center">
-        {item.ask.options.map((key) => (
-          <PictureButton
-            key={key}
-            src={`/items/objects/${key}.jpg`}
-            label={objectLabel(t, key)}
-            lift={correcting && key === item.ask.correct}
-            onClick={() => answer(key === item.ask.correct)}
-          />
-        ))}
+        {item.ask.options.map((key) => {
+          const isSelected = selected === key;
+          const selectedState = isSelected ? status : null;
+          return (
+            <PictureButton
+              key={key}
+              src={`/items/objects/${key}.jpg`}
+              label={objectLabel(t, key)}
+              selectedState={selectedState}
+              lift={correcting && key === item.ask.correct}
+              disabled={status === "correct"}
+              onClick={() => handleSelect(key)}
+            />
+          );
+        })}
       </div>
+      <QuestionFeedback
+        status={status}
+        onNext={handleNext}
+        onRetry={handleRetry}
+        t={t}
+      />
     </>
   );
 }
@@ -144,12 +212,40 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
 // ── language: "what is this called?" ────────────────────────────────────────
 
 function WhatIsThis({ item, t, correcting, onAnswer }) {
-  const answer = useDebouncedAnswer(onAnswer);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState(null);
+  const firstAttemptCorrectRef = useRef(true);
   const say = useSpeak();
-  // Once per item, never per render. See useSpeak for why this is a hook.
+
   useEffect(() => {
+    setSelected(null);
+    setStatus(null);
+    firstAttemptCorrectRef.current = true;
     say(t("ask_what_is_this"), item.id);
   }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelect = (key) => {
+    if (status === "correct") return;
+    const isRight = key === item.correct;
+    setSelected(key);
+    if (isRight) {
+      setStatus("correct");
+      say(t("thats_it"), `${item.id}-correct`);
+    } else {
+      setStatus("wrong");
+      firstAttemptCorrectRef.current = false;
+      say(t("lets_look_together"), `${item.id}-retry`);
+    }
+  };
+
+  const handleRetry = () => {
+    setSelected(null);
+    setStatus(null);
+  };
+
+  const handleNext = () => {
+    onAnswer(firstAttemptCorrectRef.current);
+  };
 
   return (
     <>
@@ -159,9 +255,6 @@ function WhatIsThis({ item, t, correcting, onAnswer }) {
         alt=""
         className="w-64 h-64 object-cover rounded-2xl border-2 border-neutral-300 mb-4"
       />
-      {/* The cue is help, not a hint that something went wrong. It is
-          translated here rather than in the bank: the bank stores asset keys,
-          the view decides what the patient reads. */}
       {item.cue && (
         <p className="text-2xl text-neutral-500 mb-6">
           {item.cueLevel === "full"
@@ -170,35 +263,70 @@ function WhatIsThis({ item, t, correcting, onAnswer }) {
         </p>
       )}
       <div className="flex flex-wrap gap-4 justify-center max-w-3xl">
-        {item.options.map((key) => (
-          <WordButton
-            key={key}
-            label={objectLabel(t, key)}
-            lift={correcting && key === item.correct}
-            onClick={() => answer(key === item.correct)}
-          />
-        ))}
+        {item.options.map((key) => {
+          const isSelected = selected === key;
+          const selectedState = isSelected ? status : null;
+          return (
+            <WordButton
+              key={key}
+              label={objectLabel(t, key)}
+              selectedState={selectedState}
+              lift={correcting && key === item.correct}
+              disabled={status === "correct"}
+              onClick={() => handleSelect(key)}
+            />
+          );
+        })}
       </div>
+      <QuestionFeedback
+        status={status}
+        onNext={handleNext}
+        onRetry={handleRetry}
+        t={t}
+      />
     </>
   );
 }
 
 // ── social: ONE face, emotion WORDS as options ──────────────────────────────
-//
-// The options are words, never faces. That is what keeps actor identity out of
-// the task -- the patient never compares two people, so the different actors
-// across the asset set cannot be used to answer anything. Do not change this
-// to show several faces at once.
 
 function HowAreTheyFeeling({ item, t, correcting, onAnswer }) {
-  const answer = useDebouncedAnswer(onAnswer);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState(null);
+  const firstAttemptCorrectRef = useRef(true);
   const pronoun = t(item.person === "man" ? "he" : "she");
   const say = useSpeak();
 
   useEffect(() => {
+    setSelected(null);
+    setStatus(null);
+    firstAttemptCorrectRef.current = true;
     say(t("ask_how_feeling", pronoun), item.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
+
+  const handleSelect = (key) => {
+    if (status === "correct") return;
+    const isRight = key === item.correct;
+    setSelected(key);
+    if (isRight) {
+      setStatus("correct");
+      say(t("thats_it"), `${item.id}-correct`);
+    } else {
+      setStatus("wrong");
+      firstAttemptCorrectRef.current = false;
+      say(t("lets_look_together"), `${item.id}-retry`);
+    }
+  };
+
+  const handleRetry = () => {
+    setSelected(null);
+    setStatus(null);
+  };
+
+  const handleNext = () => {
+    onAnswer(firstAttemptCorrectRef.current);
+  };
 
   return (
     <>
@@ -209,46 +337,53 @@ function HowAreTheyFeeling({ item, t, correcting, onAnswer }) {
         className="w-72 h-72 object-cover rounded-2xl border-2 border-neutral-300 mb-8"
       />
       <div className="flex flex-wrap gap-4 justify-center max-w-3xl">
-        {item.options.map((key) => (
-          <WordButton
-            key={key}
-            label={emotionLabel(t, key)}
-            lift={correcting && key === item.correct}
-            onClick={() => answer(key === item.correct)}
-          />
-        ))}
+        {item.options.map((key) => {
+          const isSelected = selected === key;
+          const selectedState = isSelected ? status : null;
+          return (
+            <WordButton
+              key={key}
+              label={emotionLabel(t, key)}
+              selectedState={selectedState}
+              lift={correcting && key === item.correct}
+              disabled={status === "correct"}
+              onClick={() => handleSelect(key)}
+            />
+          );
+        })}
       </div>
+      <QuestionFeedback
+        status={status}
+        onNext={handleNext}
+        onRetry={handleRetry}
+        t={t}
+      />
     </>
   );
 }
 
 // ── executive: put the routine in order ─────────────────────────────────────
-//
-// RESCORED. The old Routine game wiped the whole sequence on a wrong tap --
-// which was also the only reason errors were counted, so removing the
-// punishment removed the measurement. Now a wrong tap does NOTHING: no reset,
-// no dimming, no penalty. The next correct step lifts gently after a pause,
-// and the score is taps-to-complete. Same signal, no punishment.
 
 function PutInOrder({ item, t, correcting, onAnswer }) {
   const say = useSpeak();
-  const [placed, setPlaced] = useState(() => item.correctOrder.slice(0, item.prePlaced));
+  const [placed, setPlaced] = useState([]);
   const [hint, setHint] = useState(false);
+  const [wrongStep, setWrongStep] = useState(null);
   const tapsRef = useRef(0);
-  const reportedRef = useRef(false);
+  const firstAttemptCorrectRef = useRef(true);
 
   useEffect(() => {
+    setPlaced(item.correctOrder.slice(0, item.prePlaced));
+    setWrongStep(null);
     tapsRef.current = 0;
-    reportedRef.current = false;
+    firstAttemptCorrectRef.current = true;
     say(t("ask_put_in_order"), item.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
   const nextStep = item.correctOrder[placed.length];
+  const isComplete = placed.length === item.correctOrder.length;
 
-  // The delayed cue. Restarts on every step, so a patient who is moving
-  // steadily never sees it and a patient who stalls always does. `hintAfterMs`
-  // is null at the top of the scale, where no cue is offered at all.
   useEffect(() => {
     if (item.hintAfterMs === null || item.hintAfterMs === undefined) return undefined;
     if (placed.length >= item.correctOrder.length) return undefined;
@@ -257,31 +392,34 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
   }, [item.id, item.hintAfterMs, item.correctOrder.length, placed.length]);
 
   const tap = (step) => {
-    if (reportedRef.current) return;
+    if (isComplete) return;
     tapsRef.current += 1;
 
     if (step !== nextStep) {
-      // Wrong tap does nothing at all -- it does not advance, does not undo,
-      // and is never shown as a mistake. It brings the cue forward, and the
-      // cue then STAYS until this step is done: taking the help away again
-      // while the patient is still deciding is the one way this could start
-      // to feel like failure.
+      setWrongStep(step);
+      firstAttemptCorrectRef.current = false;
       setHint(true);
+      say(t("lets_look_together"), `${item.id}-retry`);
       return;
     }
 
+    setWrongStep(null);
     const next = [...placed, step];
     setPlaced(next);
-    // Re-arm for the next step. A patient who needed help on step 2 gets the
-    // chance to do step 3 unaided.
     setHint(false);
+
     if (next.length === item.correctOrder.length) {
-      reportedRef.current = true;
-      // Perfect run = exactly one tap per step. More taps means more help was
-      // needed; that is the measurement, and the patient never sees it.
-      const perfect = tapsRef.current <= item.correctOrder.length - item.prePlaced;
-      onAnswer(perfect);
+      say(t("thats_it"), `${item.id}-complete`);
     }
+  };
+
+  const handleRetry = () => {
+    setWrongStep(null);
+  };
+
+  const handleNext = () => {
+    const perfect = tapsRef.current <= item.correctOrder.length - item.prePlaced;
+    onAnswer(perfect && firstAttemptCorrectRef.current);
   };
 
   const remaining = item.display.filter((s) => !placed.includes(s));
@@ -290,34 +428,69 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
     <>
       <Prompt>{t("ask_put_in_order")}</Prompt>
       {placed.length > 0 && (
-        <ol className="mb-6 text-2xl text-neutral-700 space-y-1 text-center">
+        <ol className="mb-6 space-y-2 text-center w-full max-w-xl">
           {placed.map((s) => (
-            <li key={s}>{s}</li>
+            <li
+              key={s}
+              className="px-6 py-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/80 text-emerald-950 text-2xl font-medium shadow-sm flex items-center justify-between"
+            >
+              <span>{s}</span>
+              <span className="text-emerald-600 font-bold">✓</span>
+            </li>
           ))}
         </ol>
       )}
-      <div className="flex flex-col gap-4 w-full max-w-xl">
-        {remaining.map((step) => (
+      {!isComplete && (
+        <div className="flex flex-col gap-4 w-full max-w-xl">
+          {remaining.map((step) => {
+            const isWrong = wrongStep === step;
+            let borderClasses = "border-2 border-neutral-300 bg-white hover:border-neutral-400";
+            if (isWrong) {
+              borderClasses = "border-4 border-amber-500 bg-amber-50 ring-4 ring-amber-200/50";
+            } else if ((hint || correcting) && step === nextStep) {
+              borderClasses = "border-primary-500 bg-teal-50 scale-105";
+            }
+
+            return (
+              <button
+                key={step}
+                type="button"
+                onClick={() => tap(step)}
+                className={`px-8 py-6 rounded-2xl text-2xl text-left transition-all duration-200 cursor-pointer ${borderClasses}`}
+              >
+                {step}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {wrongStep && (
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-xl text-neutral-600 font-medium">
+            {t("lets_look_together")}
+          </p>
           <button
-            key={step}
             type="button"
-            onClick={() => tap(step)}
-            className={`px-8 py-6 rounded-2xl border-2 text-2xl text-left transition-transform ${
-              // One mark, one meaning: this is the next step. It arrives
-              // either because the patient paused (item.hintAfterMs) or
-              // because they tapped something that was not it -- which does
-              // nothing else at all. Neither is a failure signal, and there
-              // is no standing highlight any more: marking the answer from
-              // the start left nothing to decide and scored everyone perfect.
-              (hint || correcting) && step === nextStep
-                ? "border-primary-500 bg-teal-50 scale-105"
-                : "border-neutral-300 bg-white"
-            }`}
+            onClick={handleRetry}
+            className="px-8 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xl font-medium shadow-md transition-all flex items-center gap-2.5 cursor-pointer"
           >
-            {step}
+            <span className="text-xl font-bold">↻</span>
+            <span>{t("retry")}</span>
           </button>
-        ))}
-      </div>
+        </div>
+      )}
+      {isComplete && (
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={handleNext}
+            className="px-10 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-2xl font-medium shadow-lg transition-all flex items-center gap-3 cursor-pointer"
+          >
+            <span>{t("next")}</span>
+            <span className="text-2xl font-bold leading-none">→</span>
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -348,12 +521,40 @@ function ShapeGlyph({ name, size, rotation = 0 }) {
 }
 
 function MatchTheShape({ item, t, correcting, onAnswer }) {
-  const answer = useDebouncedAnswer(onAnswer);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState(null);
+  const firstAttemptCorrectRef = useRef(true);
   const say = useSpeak();
-  // Once per item, never per render. See useSpeak for why this is a hook.
+
   useEffect(() => {
+    setSelected(null);
+    setStatus(null);
+    firstAttemptCorrectRef.current = true;
     say(t("ask_match_shape"), item.id);
   }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelect = (name) => {
+    if (status === "correct") return;
+    const isRight = name === item.correct;
+    setSelected(name);
+    if (isRight) {
+      setStatus("correct");
+      say(t("thats_it"), `${item.id}-correct`);
+    } else {
+      setStatus("wrong");
+      firstAttemptCorrectRef.current = false;
+      say(t("lets_look_together"), `${item.id}-retry`);
+    }
+  };
+
+  const handleRetry = () => {
+    setSelected(null);
+    setStatus(null);
+  };
+
+  const handleNext = () => {
+    onAnswer(firstAttemptCorrectRef.current);
+  };
 
   return (
     <>
@@ -362,24 +563,37 @@ function MatchTheShape({ item, t, correcting, onAnswer }) {
         <ShapeGlyph name={item.target} size={110} />
       </div>
       <div className="flex flex-wrap gap-5 justify-center max-w-3xl">
-        {item.options.map((name) => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => answer(name === item.correct)}
-            className={`p-4 rounded-2xl border-2 transition-transform ${
-              correcting && name === item.correct
-                ? "border-primary-500 bg-teal-50 scale-105"
-                : "border-neutral-300 bg-white"
-            }`}
-          >
-            <ShapeGlyph name={name} size={88} rotation={item.rotationDeg} />
-            <span className="block mt-1 text-lg text-neutral-700">
-              {shapeLabel(t, name)}
-            </span>
-          </button>
-        ))}
+        {item.options.map((name) => {
+          const isSelected = selected === name;
+          let borderClasses = "border-2 border-neutral-300 bg-white hover:border-neutral-400";
+          if ((isSelected && status === "correct") || (correcting && name === item.correct)) {
+            borderClasses = "border-4 border-emerald-500 bg-emerald-50 scale-105 shadow-md ring-4 ring-emerald-200/60 font-semibold";
+          } else if (isSelected && status === "wrong") {
+            borderClasses = "border-4 border-amber-500 bg-amber-50 ring-4 ring-amber-200/50";
+          }
+
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => handleSelect(name)}
+              disabled={status === "correct"}
+              className={`p-4 rounded-2xl transition-all duration-200 flex flex-col items-center cursor-pointer ${borderClasses}`}
+            >
+              <ShapeGlyph name={name} size={88} rotation={item.rotationDeg} />
+              <span className="block mt-1 text-lg text-neutral-700 font-medium">
+                {shapeLabel(t, name)}
+              </span>
+            </button>
+          );
+        })}
       </div>
+      <QuestionFeedback
+        status={status}
+        onNext={handleNext}
+        onRetry={handleRetry}
+        t={t}
+      />
     </>
   );
 }
@@ -398,6 +612,7 @@ function GoNoGo({ item, t, onAnswer }) {
   const say = useSpeak();
   const [step, setStep] = useState(0);
   const [ack, setAck] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const hitsRef = useRef({ correct: 0, total: 0 });
   const respondedRef = useRef(false);
   const doneRef = useRef(false);
@@ -406,12 +621,17 @@ function GoNoGo({ item, t, onAnswer }) {
   const advanceRef = useRef(() => {});
   const ackTimerRef = useRef(null);
 
-  useEffect(() => {
+  const startTrial = () => {
     hitsRef.current = { correct: 0, total: 0 };
     doneRef.current = false;
-    // item.promptKey, not a literal: the generator emits no red stimulus
-    // below level 3, and the instruction has to say so.
+    setStep(0);
+    setAck(false);
+    setCompleted(false);
     say(t(item.promptKey), item.id);
+  };
+
+  useEffect(() => {
+    startTrial();
     return () => clearTimeout(ackTimerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
@@ -429,8 +649,7 @@ function GoNoGo({ item, t, onAnswer }) {
       advanced = true;
       if (step + 1 >= item.order.length) {
         doneRef.current = true;
-        const { correct, total } = hitsRef.current;
-        onAnswer(total > 0 && correct / total >= 0.6);
+        setCompleted(true);
       } else {
         setStep(step + 1);
       }
@@ -460,19 +679,6 @@ function GoNoGo({ item, t, onAnswer }) {
 
     // A RESPONSE ENDS THE TRIAL, and it does so identically for green and
     // red. Both halves of that matter.
-    //
-    // Ending it: the circle used to sit there for the rest of the window --
-    // up to 1.6 seconds at level 7 -- with only a 200ms dip to opacity-60 to
-    // show for the tap. That reads as a dead control, so the patient taps
-    // again, and what gets measured is their confusion rather than their
-    // attention. The window is now the LONGEST a stimulus can stay, not
-    // always how long it stays: a trial nobody answers still runs the full
-    // window, which is what gives a no-go its time to be answered correctly
-    // by doing nothing. Response time is still logged silently.
-    //
-    // Identically: making a red tap look or feel different from a green one
-    // would be a failure signal, which is the one thing section 8 rules out
-    // absolutely. The score records the difference; the screen never does.
     const advance = advanceRef.current;
     setAck(true);
     clearTimeout(ackTimerRef.current);
@@ -481,6 +687,33 @@ function GoNoGo({ item, t, onAnswer }) {
       advance();
     }, GONOGO_ACK_MS);
   };
+
+  const handleNext = () => {
+    const { correct, total } = hitsRef.current;
+    onAnswer(total > 0 && correct / total >= 0.6);
+  };
+
+  if (completed) {
+    return (
+      <div className="flex flex-col items-center gap-6 animate-fade-in max-w-lg text-center">
+        <Prompt>{t(item.promptKey)}</Prompt>
+        <div className="p-8 rounded-3xl border-4 border-emerald-500 bg-emerald-50 text-emerald-950 shadow-md ring-4 ring-emerald-200/60 flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center text-3xl font-bold">
+            ✓
+          </div>
+          <p className="text-2xl font-medium">{t("thats_it")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleNext}
+          className="px-10 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-2xl font-medium shadow-lg transition-all flex items-center gap-3 cursor-pointer"
+        >
+          <span>{t("next")}</span>
+          <span className="text-2xl font-bold leading-none">→</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

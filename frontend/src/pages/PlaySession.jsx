@@ -28,7 +28,7 @@ import {
   sessionGate,
 } from "@shared/sessionRules";
 
-import ItemStage from "../components/games/ItemStage";
+import ItemStage, { getLightCoolBgForItem } from "../components/games/ItemStage";
 import { preloadItems } from "../lib/preload";
 import WaitingScreen from "../components/games/WaitingScreen";
 import {
@@ -242,9 +242,10 @@ export default function PlaySession() {
 
   const session = state.session;
   const item = session.items[session.index];
+  const screenBg = getLightCoolBgForItem(item?.id);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className={`min-h-screen ${screenBg} transition-colors duration-500 flex flex-col`}>
       <PreviewBadge on={preview} />
       <header className="flex justify-end px-5 pt-5">
         {/* The way out. Always visible. No progress counter: "3 of 12" is
@@ -252,7 +253,7 @@ export default function PlaySession() {
         <button
           type="button"
           onClick={leave}
-          className="px-6 py-3 rounded-xl border-2 border-neutral-400 text-neutral-700 text-xl"
+          className="px-6 py-3 rounded-xl border-2 border-neutral-400 text-neutral-700 text-xl bg-white/70 hover:bg-white transition-colors"
         >
           {t("stop")}
         </button>

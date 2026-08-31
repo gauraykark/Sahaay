@@ -18,7 +18,7 @@ import { selectItem } from "@shared/itemBank";
 import { levelForPlay } from "@shared/levels";
 import { itemsForDomain } from "@shared/sessionRules";
 
-import ItemStage from "../components/games/ItemStage";
+import ItemStage, { getLightCoolBgForItem } from "../components/games/ItemStage";
 import { getDomainLevel, logGameSession, recentItemIds } from "../lib/db";
 import { useT } from "../lib/i18n";
 
@@ -98,19 +98,22 @@ export default function PlayDomain() {
     );
   }
 
+  const currentItem = items[index];
+  const screenBg = getLightCoolBgForItem(currentItem?.id);
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className={`min-h-screen ${screenBg} transition-colors duration-500 flex flex-col`}>
       <header className="flex justify-end px-5 pt-5">
         <button
           type="button"
           onClick={() => navigate("/patient")}
-          className="px-6 py-3 rounded-xl border-2 border-neutral-400 text-neutral-700 text-xl"
+          className="px-6 py-3 rounded-xl border-2 border-neutral-400 text-neutral-700 text-xl bg-white/70 hover:bg-white transition-colors"
         >
           {t("stop")}
         </button>
       </header>
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
-        <ItemStage key={`${domain}-${index}`} item={items[index]} onDone={onDone} />
+        <ItemStage key={`${domain}-${index}`} item={currentItem} onDone={onDone} />
       </main>
     </div>
   );

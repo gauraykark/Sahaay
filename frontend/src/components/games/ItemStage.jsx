@@ -1,25 +1,36 @@
 // One item, rendered and answered.
 //
-// The errorless behaviour that used to live in GameShell lives here now, so
-// the session runner can drive twelve items in a row without twelve shells.
-// GameShell is gone; this is what replaced its inner half.
+// Drives the item, measures latency, and reports the result on completion.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-import { useSpeak, useT } from "../../lib/i18n";
+import { useT } from "../../lib/i18n";
 import RENDERERS from "./renderers";
 
-// How long the gentle correction stays up. Long enough to read, short enough
-// not to dwell on it.
-const CORRECTION_MS = 2200;
+export const LIGHT_COOL_BGS = [
+  "bg-[#eef6ff]", // cool sky blue
+  "bg-[#e6f7f5]", // calm ice teal
+  "bg-[#f0f3ff]", // soft indigo
+  "bg-[#eaf8fc]", // soothing light cyan
+  "bg-[#eaf7f2]", // soft cool mint
+  "bg-[#f3f0ff]", // light lavender
+  "bg-[#edf2f7]", // cool slate tint
+  "bg-[#eafaf7]", // light cool aqua
+];
+
+export function getLightCoolBgForItem(itemId) {
+  let hash = 0;
+  const str = String(itemId || "");
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % LIGHT_COOL_BGS.length;
+  return LIGHT_COOL_BGS[index];
+}
 
 export default function ItemStage({ item, onDone }) {
   const t = useT();
-  const say = useSpeak();
-  const [correcting, setCorrecting] = useState(false);
-  // Set in an effect, not during render: reading the clock while rendering is
-  // impure, and the timing we want is "when the patient first saw this item"
-  // anyway, which is mount.
   const startedRef = useRef(0);
   const doneRef = useRef(false);
 
@@ -30,41 +41,26 @@ export default function ItemStage({ item, onDone }) {
 
   const answer = useCallback(
     (wasCorrect) => {
-      if (doneRef.current || correcting) return;
+      if (doneRef.current) return;
+      doneRef.current = true;
 
-      const finish = () => {
-        doneRef.current = true;
-        setCorrecting(false);
-        onDone({
-          item,
-          correct: wasCorrect,
-          attempted: true,
-          latencyMs: Date.now() - startedRef.current,
-          status: "completed",
-        });
-      };
-
-      if (wasCorrect) {
-        finish();
-        return;
-      }
-
-      // Errorless: no failure signal at all. The right answer appears warmly,
-      // the patient's pick is left alone, and we move on. They should not be
-      // able to tell they got it wrong.
-      setCorrecting(true);
-      // useSpeak keys on the item, so the correction speaks once per item
-      // and in the patient's own language -- speak(text, langToLocale()) was
-      // passing a string where an options object goes, so every utterance in
-      // the games came out as en-IN regardless of the setting.
-      say(t("lets_look_together"), `correct-${item.id}`);
-      setTimeout(finish, CORRECTION_MS);
+      onDone({
+        item,
+        correct: wasCorrect,
+        attempted: true,
+        latencyMs: Date.now() - startedRef.current,
+        status: "completed",
+      });
     },
-    [correcting, item, onDone, say, t]
+    [item, onDone]
   );
 
   const Renderer = RENDERERS[item.template];
   if (!Renderer) return null;
 
-  return <Renderer key={item.id} item={item} t={t} correcting={correcting} onAnswer={answer} />;
+  return (
+    <div className="w-full flex flex-col items-center justify-center">
+      <Renderer item={item} t={t} correcting={false} onAnswer={answer} />
+    </div>
+  );
 }
