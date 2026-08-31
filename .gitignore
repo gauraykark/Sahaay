@@ -13,3 +13,4 @@ backend/.env
 # tools/normalise_item_images.py --apply. 17MB of 7000px originals; the
 # normalised 800px versions in public/items are what ships.
 frontend/items-originals/
+backend/.env
