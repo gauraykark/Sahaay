@@ -26,7 +26,7 @@
 // renderer. test_item_bank.mjs asserts this with structuredClone.
 
 import { DOMAINS } from "./domains.js";
-import { MAX_LEVEL, MIN_LEVEL, difficultyFor } from "./levels.js";
+import { MAX_LEVEL, MIN_LEVEL, difficultyFor, levelForPlay } from "./levels.js";
 
 export const ITEMS_BASE = "/items";
 export const objectUrl = (key) => `${ITEMS_BASE}/objects/${key}.jpg`;
@@ -307,17 +307,29 @@ function executiveItems() {
   }));
 }
 
+// At least THREE steps, always. Two steps with the first pre-placed left a
+// single tappable option -- there was no ordering decision to make, so the
+// item measured nothing and looked broken to the patient.
+const MIN_EXECUTIVE_STEPS = 3;
+
+/** How many steps this level SHOULD present, ignoring what the bank holds. */
+export function executiveStepsWanted(level) {
+  const l = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, level));
+  return Math.max(MIN_EXECUTIVE_STEPS, 2 + Math.floor(l / 2));
+}
+
+/** How many steps a given routine can actually present at this level. */
+function executiveStepCount(level, available) {
+  return Math.min(
+    Math.max(Math.min(MIN_EXECUTIVE_STEPS, available), executiveStepsWanted(level)),
+    available
+  );
+}
+
 function buildExecutive(item, level) {
   const d = difficultyFor(level);
 
-  // At least THREE steps, always. Two steps with the first pre-placed left a
-  // single tappable option -- there was no ordering decision to make, so the
-  // item measured nothing and looked broken to the patient.
-  const MIN_STEPS = 3;
-  const count = Math.max(
-    Math.min(MIN_STEPS, item.steps.length),
-    Math.min(2 + Math.floor(level / 2), item.steps.length)
-  );
+  const count = executiveStepCount(level, item.steps.length);
   const steps = item.steps.slice(0, count);
 
   return {
@@ -330,11 +342,25 @@ function buildExecutive(item, level) {
     display: seededShuffle(steps, 6000 + level + item.steps.length),
     correctOrder: steps,
     cueLevel: d.cueLevel,
-    // Nothing is pre-placed any more. At full cue the NEXT correct step is
-    // highlighted instead -- the patient still cannot fail, and every step
-    // stays tappable, so the task exists at every level.
+    // Nothing is pre-placed any more. Every step stays tappable, so the task
+    // exists at every level.
     prePlaced: 0,
-    showNextHint: d.cueLevel === "full",
+    // A DELAYED prompt, not a standing one.
+    //
+    // This used to be `showNextHint: cueLevel === "full"`, which marked the
+    // next correct step from the moment the board appeared. That is not a
+    // gentle version of the task, it is the answer key: the patient taps the
+    // highlighted button N times, taps-to-complete is always exactly N, and
+    // executive scores a constant 1.0 for everyone at levels 0-4. A domain
+    // that cannot produce a low score is not measuring anything -- the same
+    // hollowness that made the old four-domain attention score meaningless.
+    //
+    // So the cue waits. The patient gets a few seconds to make the ordering
+    // decision themselves; if they hesitate, the right step lifts before they
+    // can feel stuck. Errorless is intact -- nobody fails, nobody stalls --
+    // and the interval before the cue is where the measurement lives. A wrong
+    // tap still surfaces the cue immediately, and still does nothing else.
+    hintAfterMs: d.cueLevel === "full" ? 4000 : d.cueLevel === "partial" ? 9000 : null,
   };
 }
 
@@ -345,7 +371,17 @@ export function generateAttention(level, seed = 0) {
   // Level 0 must be near-impossible to fail: no no-go stimuli at all, so every
   // tap is correct. The measure still runs, it just cannot punish anyone.
   const noGoRatio = l < 3 ? 0 : Math.min(0.1 + l * 0.015, 0.3);
-  const stimuli = 6 + l * 2;
+  // Stimulus count is 4 + level, not 6 + level * 2.
+  //
+  // The old curve put 20 circles on the screen at level 7, and a trial can run
+  // the full windowMs when nobody answers -- so one attention item cost about
+  // 32 seconds, and three of them ran the block to roughly a minute and a half.
+  // That is a sixth of the domains eating a third of a ten-minute session, and
+  // the extra trials bought nothing: sustained attention and response
+  // inhibition are already read off eleven trials. The go/no-go design, the
+  // no-go ratio, the response window and the acknowledgement are unchanged --
+  // this is the length of the block, not the difficulty of it.
+  const stimuli = 4 + l;
   const noGoCount = Math.round(stimuli * noGoRatio);
   return {
     id: `att-gen-${l}-${seed}`,
@@ -354,7 +390,15 @@ export function generateAttention(level, seed = 0) {
     generated: true,
     level: l,
     seed,
-    promptKey: "ask_tap_green",
+    // THE INSTRUCTION IS DERIVED FROM THE STIMULUS SET, never assumed.
+    //
+    // Below level 3 noGoRatio is 0, so no red circle is ever drawn -- and
+    // "Tap the green circle. Leave the red one" then describes a screen the
+    // patient will not see. Telling someone with dementia to watch for
+    // something that never arrives is not a harmless inaccuracy: they spend
+    // the round waiting for it, and confusion at the instruction is measured
+    // as inattention. Whatever the generator emits, the prompt matches it.
+    promptKey: noGoCount > 0 ? "ask_tap_green" : "ask_tap_all",
     stimuli,
     noGoCount,
     goCount: stimuli - noGoCount,
@@ -374,6 +418,19 @@ export function generateAttention(level, seed = 0) {
 
 const SHAPES = ["circle", "square", "triangle", "diamond", "hexagon", "star"];
 
+// SHAPE MATCH ONLY. The spec lists "match shape / set clock hands" for this
+// domain and there are no clock items; that is not an oversight left open, it
+// is the tap-only rule (spec section 15) applied. Setting hands on a clock is
+// a drag, and drag is ruled out because tremor is common -- a patient who
+// cannot hold a drag would score as a perceptual-motor deficit they do not
+// have, which is worse than not asking.
+//
+// A tap-only clock question is possible ("which clock shows half past four?"),
+// but it reads a dial rather than judging space, so it measures something
+// closer to language and numeracy than perceptual-motor. If it is ever wanted
+// it should be added as its own template with that understood, not as a
+// substitute for the missing one. Rotation does not need it either: this
+// generator is infinite.
 export function generatePerceptualMotor(level, seed = 0) {
   const l = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, level));
   const d = difficultyFor(l);
@@ -467,6 +524,35 @@ export function eligibleItems(domain, level) {
  * question. `exhausted: true` says the rotation guarantee has lapsed so the
  * caller can report honestly rather than silently pretend.
  */
+/**
+ * Narrow a pool to the items that can actually carry this level.
+ *
+ * Executive is the only domain where an eligible item can still be too easy.
+ * Every routine is eligible to the top of the scale on purpose -- barring
+ * short ones left three routines at level 15, and a pool of three means the
+ * patient sees the same one every other day and memorises it, which is exactly
+ * what the 14-day rule exists to stop. But eligibility alone let a three-step
+ * routine be served at level 9, where `buildExecutive` can only trim it, never
+ * extend it: the ordering decision was then trivial regardless of the level,
+ * and the level had stopped controlling difficulty at all.
+ *
+ * So: prefer routines long enough to fill the level, and fall back to the
+ * whole pool when none are. Deep rotation and a real task, rather than one at
+ * the cost of the other. Rotation still wins -- this narrows what is already
+ * unseen, and never reaches past it for a longer routine.
+ */
+function preferBestFit(domain, level, pool) {
+  if (domain !== "executive") return pool;
+
+  const wanted = executiveStepsWanted(level);
+  const fits = pool.filter((item) => item.steps.length >= wanted);
+  if (fits.length > 0) return fits;
+
+  // Nothing is long enough. Take the longest on offer rather than any of them.
+  const longest = Math.max(...pool.map((item) => item.steps.length));
+  return pool.filter((item) => item.steps.length === longest);
+}
+
 export function selectItem({ domain, level, recentIds = new Set(), seed = 0, lastSeenAt = {} }) {
   if (!DOMAINS.includes(domain)) throw new Error(`unknown domain: ${domain}`);
 
@@ -482,7 +568,7 @@ export function selectItem({ domain, level, recentIds = new Set(), seed = 0, las
   }
 
   const unseen = eligible.filter((item) => !recentIds.has(item.id));
-  const pool = unseen.length > 0 ? unseen : eligible;
+  const pool = preferBestFit(domain, level, unseen.length > 0 ? unseen : eligible);
   const exhausted = unseen.length === 0;
 
   let chosen;
@@ -509,7 +595,8 @@ export function selectSessionItems({ level, recentIdsByDomain = {}, seed = 0 }) 
   return DOMAINS.map((domain, i) =>
     selectItem({
       domain,
-      level: typeof level === "object" ? (level[domain] ?? MIN_LEVEL) : level,
+      // Uncalibrated resolves to STARTING_LEVEL, never to the floor.
+      level: levelForPlay(typeof level === "object" ? level[domain] : level),
       recentIds: recentIdsByDomain[domain] ?? new Set(),
       seed: seed + i,
     })

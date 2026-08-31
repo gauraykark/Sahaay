@@ -689,14 +689,15 @@ export async function setServerPatientId(serverId, patientId = null) {
 // replaced by a deterministic formula: the same inputs must always give the
 // same level, which no model can promise.
 //
-// These three are kept as no-ops rather than deleted outright because their
-// callers -- resolveNextLevel() and the sync orchestrator -- belong to
-// Sprint 7, and removing the functions now would break them mid-rewrite for
-// no gain. getAIPlan() returning null is already the "fall back to the rule
-// engine" signal, so the game loop degrades exactly as designed.
+// The sync orchestrator no longer calls saveAIPlan() -- api.js dropped the
+// plan fetch along with the last client call to /ai/adapt-difficulty, which
+// was firing after every synced round against an endpoint Sprint 7 deletes.
 //
-// SPRINT 7: delete all three, with their call sites in difficulty.js and
-// api.js.
+// These three are now unreferenced. They stay as no-ops only so that anything
+// still importing them resolves; getAIPlan() returning null is already the
+// "fall back to the deterministic path" signal.
+//
+// SPRINT 7: delete all three outright. There are no call sites left to fix.
 
 /** No-op. The plan table is gone; kept so Sprint 7's callers still resolve. */
 export async function saveAIPlan() {

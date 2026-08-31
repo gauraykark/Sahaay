@@ -26,6 +26,48 @@ export const MAX_LEVEL = 15;
 /** A patient who has never been calibrated. Distinct from MIN_LEVEL. */
 export const UNCALIBRATED = null;
 
+/**
+ * Where an uncalibrated patient PLAYS until something measures them.
+ *
+ * This is not a level anybody has been assigned. It is the level the games are
+ * built at when the store says `null`, and it is deliberately not MIN_LEVEL.
+ *
+ * Serving 0 to an uncalibrated patient was a real bug, not a safe default. At
+ * level 0 the attention generator emits `noGoRatio === 0` (no red stimulus at
+ * all), executive falls to three steps with the next one highlighted, and
+ * memory shows two pictures behind a two-second gap. Every domain then scores a
+ * near-constant 1.0, which is not "an easy session" -- it is six trend lines
+ * measuring nothing, and a flat line from a task nobody can fail is
+ * indistinguishable from a flat line from a patient who is doing fine.
+ *
+ * Mid-scale is the honest placeholder. The spec's calibration (section 3)
+ * starts high and drops fast on failure; until that exists, starting at the
+ * middle is wrong by at most a few steps in either direction, and the weekly
+ * evaluator can walk a patient to their real level from here. Starting at the
+ * floor is wrong by up to fifteen and can only walk upwards.
+ *
+ * INTERIM. Once calibration lands this becomes its starting point rather than
+ * a standing default, and a calibrated patient never reads it at all.
+ */
+export const STARTING_LEVEL = 7;
+
+/**
+ * The level to actually build an item at.
+ *
+ * The one place `null` is allowed to become a number, and it does so WITHOUT
+ * writing anything: `getDomainLevels()` keeps returning null, the session row
+ * keeps storing null, and the report can still say "not calibrated". Storing
+ * STARTING_LEVEL instead would forge a measurement nobody took.
+ *
+ * Every game-building path goes through here. Scattering `?? MIN_LEVEL` at the
+ * call sites is what produced the level-0 sessions in the first place -- four
+ * copies of the same decision, none of them stated as one.
+ */
+export function levelForPlay(level) {
+  const stored = levelOrNull(level);
+  return stored === null ? STARTING_LEVEL : stored;
+}
+
 /** True only for a real level: an integer inside [MIN_LEVEL, MAX_LEVEL]. */
 export function isLevel(value) {
   return (

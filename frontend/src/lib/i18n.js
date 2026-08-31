@@ -67,7 +67,11 @@ const strings = {
     ask_how_feeling: (pronoun) => `How is ${pronoun} feeling?`,
     ask_put_in_order: "Put these in the order you do them",
     ask_match_shape: "Tap the shape that matches",
+    // Two instructions because there are two stimulus sets. Below level 3
+    // the generator emits no red circle at all, and the prompt must not
+    // describe one -- see generateAttention in shared/itemBank.js.
     ask_tap_green: "Tap the green circle. Leave the red one",
+    ask_tap_all: "Tap each circle you see",
 
     he: "he",
     she: "she",
@@ -162,6 +166,7 @@ const strings = {
     ask_put_in_order: "इन्हें उसी क्रम में रखें जैसे आप करते हैं",
     ask_match_shape: "मिलती-जुलती आकृति पर टैप करें",
     ask_tap_green: "हरे गोले पर टैप करें। लाल को छोड़ दें",
+    ask_tap_all: "हर गोले पर टैप करें",
 
     he: "वह",
     she: "वह",
@@ -253,6 +258,7 @@ const strings = {
     ask_put_in_order: "আপুনি যিদৰে কৰে সেই ক্ৰমত ৰাখক",
     ask_match_shape: "মিল খোৱা আকৃতিটোত টিপক",
     ask_tap_green: "সেউজীয়া বৃত্তত টিপক। ৰঙাটো এৰি দিয়ক",
+    ask_tap_all: "প্ৰতিটো বৃত্ততে টিপক",
 
     he: "তেওঁ",
     she: "তেওঁ",

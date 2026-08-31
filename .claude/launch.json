@@ -2,11 +2,30 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "sahaay-backend",
+      "runtimeExecutable": "backend/venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
+      "cwd": "backend",
+      "port": 8000,
+      "autoPort": false
+    },
+    {
       "name": "sahaay-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "frontend",
-      "port": 5173
+      "port": 5173,
+      "autoPort": false
     }
   ]
 }

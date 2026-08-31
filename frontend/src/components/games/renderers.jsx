@@ -248,19 +248,35 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
 
   const nextStep = item.correctOrder[placed.length];
 
+  // The delayed cue. Restarts on every step, so a patient who is moving
+  // steadily never sees it and a patient who stalls always does. `hintAfterMs`
+  // is null at the top of the scale, where no cue is offered at all.
+  useEffect(() => {
+    if (item.hintAfterMs === null || item.hintAfterMs === undefined) return undefined;
+    if (placed.length >= item.correctOrder.length) return undefined;
+    const timer = setTimeout(() => setHint(true), item.hintAfterMs);
+    return () => clearTimeout(timer);
+  }, [item.id, item.hintAfterMs, item.correctOrder.length, placed.length]);
+
   const tap = (step) => {
     if (reportedRef.current) return;
     tapsRef.current += 1;
 
     if (step !== nextStep) {
-      // Wrong tap does nothing at all. After a moment the right one lifts.
+      // Wrong tap does nothing at all -- it does not advance, does not undo,
+      // and is never shown as a mistake. It brings the cue forward, and the
+      // cue then STAYS until this step is done: taking the help away again
+      // while the patient is still deciding is the one way this could start
+      // to feel like failure.
       setHint(true);
-      setTimeout(() => setHint(false), 1600);
       return;
     }
 
     const next = [...placed, step];
     setPlaced(next);
+    // Re-arm for the next step. A patient who needed help on step 2 gets the
+    // chance to do step 3 unaided.
+    setHint(false);
     if (next.length === item.correctOrder.length) {
       reportedRef.current = true;
       // Perfect run = exactly one tap per step. More taps means more help was
@@ -289,12 +305,13 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
             type="button"
             onClick={() => tap(step)}
             className={`px-8 py-6 rounded-2xl border-2 text-2xl text-left transition-transform ${
-              // showNextHint is the full-cue help: the next correct step is
-              // gently marked from the start, so a patient at the bottom of
-              // the scale cannot get stuck. `hint` is the same mark shown
-              // briefly after a tap that was not the next step -- which does
-              // nothing else at all. Neither is a failure signal.
-              (hint || correcting || item.showNextHint) && step === nextStep
+              // One mark, one meaning: this is the next step. It arrives
+              // either because the patient paused (item.hintAfterMs) or
+              // because they tapped something that was not it -- which does
+              // nothing else at all. Neither is a failure signal, and there
+              // is no standing highlight any more: marking the answer from
+              // the start left nothing to decide and scored everyone perfect.
+              (hint || correcting) && step === nextStep
                 ? "border-primary-500 bg-teal-50 scale-105"
                 : "border-neutral-300 bg-white"
             }`}
@@ -375,31 +392,45 @@ function MatchTheShape({ item, t, correcting, onAnswer }) {
 // attention. Tap green, leave red. That measures sustained attention AND
 // response inhibition, which reaction time alone does not.
 
+// How long the tap acknowledgement shows before the next stimulus. Short
+// enough to keep the task brisk, long enough to be seen.
+const GONOGO_ACK_MS = 180;
+
 function GoNoGo({ item, t, onAnswer }) {
   const say = useSpeak();
   const [step, setStep] = useState(0);
-  const [flash, setFlash] = useState(false);
+  const [ack, setAck] = useState(false);
   const hitsRef = useRef({ correct: 0, total: 0 });
   const respondedRef = useRef(false);
   const doneRef = useRef(false);
+  // This step's advance, so a tap can end the trial the same way the window
+  // does. Replaced whenever the step changes; each one refuses to run twice.
+  const advanceRef = useRef(() => {});
+  const ackTimerRef = useRef(null);
 
   useEffect(() => {
     hitsRef.current = { correct: 0, total: 0 };
     doneRef.current = false;
     setStep(0);
-    say(t("ask_tap_green"), item.id);
+    setAck(false);
+    // item.promptKey, not a literal: the generator emits no red stimulus
+    // below level 3, and the instruction has to say so.
+    say(t(item.promptKey), item.id);
+    return () => clearTimeout(ackTimerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
   useEffect(() => {
-    if (doneRef.current || step >= item.order.length) return;
+    if (doneRef.current || step >= item.order.length) return undefined;
     respondedRef.current = false;
-    const timer = setTimeout(() => {
-      // No response inside the window. Correct for a red, a miss for a green.
-      if (!respondedRef.current) {
-        hitsRef.current.total += 1;
-        if (item.order[step] === "nogo") hitsRef.current.correct += 1;
-      }
+
+    // One advance per step, whoever calls it first -- the response or the
+    // window running out. A stale call from a tap whose acknowledgement
+    // outlived its step is a no-op rather than a skipped stimulus.
+    let advanced = false;
+    const advance = () => {
+      if (advanced || doneRef.current) return;
+      advanced = true;
       if (step + 1 >= item.order.length) {
         doneRef.current = true;
         const { correct, total } = hitsRef.current;
@@ -407,7 +438,18 @@ function GoNoGo({ item, t, onAnswer }) {
       } else {
         setStep(step + 1);
       }
+    };
+    advanceRef.current = advance;
+
+    const timer = setTimeout(() => {
+      // No response inside the window. Correct for a red, a miss for a green.
+      if (!respondedRef.current) {
+        hitsRef.current.total += 1;
+        if (item.order[step] === "nogo") hitsRef.current.correct += 1;
+      }
+      advance();
     }, item.windowMs);
+
     return () => clearTimeout(timer);
   }, [step, item, onAnswer]);
 
@@ -419,22 +461,43 @@ function GoNoGo({ item, t, onAnswer }) {
     respondedRef.current = true;
     hitsRef.current.total += 1;
     if (kind === "go") hitsRef.current.correct += 1;
-    // A warm flash either way. Tapping a red one is not shown as a mistake.
-    setFlash(true);
-    setTimeout(() => setFlash(false), 200);
+
+    // A RESPONSE ENDS THE TRIAL, and it does so identically for green and
+    // red. Both halves of that matter.
+    //
+    // Ending it: the circle used to sit there for the rest of the window --
+    // up to 1.6 seconds at level 7 -- with only a 200ms dip to opacity-60 to
+    // show for the tap. That reads as a dead control, so the patient taps
+    // again, and what gets measured is their confusion rather than their
+    // attention. The window is now the LONGEST a stimulus can stay, not
+    // always how long it stays: a trial nobody answers still runs the full
+    // window, which is what gives a no-go its time to be answered correctly
+    // by doing nothing. Response time is still logged silently.
+    //
+    // Identically: making a red tap look or feel different from a green one
+    // would be a failure signal, which is the one thing section 8 rules out
+    // absolutely. The score records the difference; the screen never does.
+    const advance = advanceRef.current;
+    setAck(true);
+    clearTimeout(ackTimerRef.current);
+    ackTimerRef.current = setTimeout(() => {
+      setAck(false);
+      advance();
+    }, GONOGO_ACK_MS);
   };
 
   return (
     <>
-      <Prompt>{t("ask_tap_green")}</Prompt>
+      <Prompt>{t(item.promptKey)}</Prompt>
       <button
         type="button"
         onClick={tap}
         aria-label={kind}
+        data-ack={ack ? "true" : "false"}
         style={{ width: size, height: size }}
-        className={`rounded-full transition-opacity ${
+        className={`rounded-full transition-all duration-150 ease-out ${
           kind === "go" ? "bg-emerald-500" : "bg-red-500"
-        } ${flash ? "opacity-60" : "opacity-100"}`}
+        } ${ack ? "scale-75 opacity-30" : "scale-100 opacity-100"}`}
       />
     </>
   );

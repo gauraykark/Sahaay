@@ -100,6 +100,9 @@ export async function login({ email, password }) {
   const data = await res.json();
   setToken(data.access_token);
   localStorage.setItem(ROLE_KEY, data.role);
+  // A successful login proves the backend is reachable, so any sync backoff
+  // standing from when it was not is stale.
+  resetSyncBackoff();
 
   return { token: data.access_token, role: data.role, name: data.name };
 }
@@ -335,23 +338,20 @@ export async function fetchAIStatus() {
   }
 }
 
-/**
- * Fetch a fresh difficulty plan and hand it to the caller to cache.
- *
- * Background only — never awaited on a path the patient is waiting on. Returns
- * null on any failure, because failing to refresh a plan is not an error: the
- * device keeps playing on the plan it already has.
- */
-export async function fetchDifficultyPlan(patientId, { lookback = 8 } = {}) {
-  try {
-    return await apiFetch("/ai/adapt-difficulty", {
-      method: "POST",
-      body: JSON.stringify({ patient_id: patientId, lookback_sessions: lookback }),
-    });
-  } catch {
-    return null;
-  }
-}
+// fetchDifficultyPlan() is GONE, and with it the last client call to
+// /ai/adapt-difficulty.
+//
+// Difficulty is a formula now — difficultyFor() in shared/levels.js — so there
+// is no plan to fetch. The call had already stopped doing anything useful:
+// schema v4 dropped the aiPlans table, so saveAIPlan() was a no-op and every
+// response was thrown away. What it still did was fire a POST after every
+// synced round, against an endpoint Sprint 7 deletes, and fail loudly on a
+// device whose backend was down.
+//
+// Deliberately not replaced with a call to anything else. Nothing the patient
+// does should need the network to resolve a level: the same inputs must always
+// give the same difficulty, which is the whole reason a model is not in this
+// loop.
 
 /**
  * Generate a progress report. This one is allowed to block — it is triggered
@@ -375,35 +375,100 @@ export async function generateReport({
 }
 
 // ── Online sync orchestrator ──────────────────────────────────────────────────
+//
+// Backoff, because this is called from a loop the patient controls.
+//
+// Every logged round fires a sync (db.js), and a session is eighteen rounds.
+// With the backend down that was eighteen failing POSTs per session, each one
+// resending a queue that only grows, plus eighteen more to /ai/adapt-difficulty
+// — a console full of ERR_FAILED, and a device burning battery on a server
+// that is not there.
+//
+// Retrying immediately also cannot help. The queue is durable: a row waits in
+// IndexedDB until it syncs, and whether that is now or in four minutes changes
+// nothing clinically. So on failure we wait, doubling each time, and after
+// SYNC_MAX_ATTEMPTS consecutive failures we stop trying on our own entirely
+// and wait to be woken by a real signal.
+
+const SYNC_BASE_DELAY_MS = 5_000;
+const SYNC_MAX_DELAY_MS = 5 * 60_000;
+
+/** Consecutive failures before the device gives up until something wakes it. */
+const SYNC_MAX_ATTEMPTS = 6;
+
+const syncState = { failures: 0, nextAttemptAt: 0, inFlight: false };
 
 /**
- * Push queued sessions, then pull a fresh plan.
+ * Clear the backoff and allow an immediate attempt.
  *
- * Fire and forget. Called on the browser's `online` event and after a session
- * is logged. Nothing in the UI waits for it to finish.
+ * The events that mean "the world may have changed" — the browser coming back
+ * online, a fresh login — reset the counter. A patient who reconnects should
+ * not sit out the tail of a backoff earned while they were offline.
+ */
+export function resetSyncBackoff() {
+  syncState.failures = 0;
+  syncState.nextAttemptAt = 0;
+}
+
+/** What the backoff is doing right now. For tests and diagnostics. */
+export function syncBackoffState() {
+  return {
+    failures: syncState.failures,
+    nextAttemptAt: syncState.nextAttemptAt,
+    exhausted: syncState.failures >= SYNC_MAX_ATTEMPTS,
+  };
+}
+
+function noteSyncFailure() {
+  syncState.failures += 1;
+  const delay = Math.min(
+    SYNC_BASE_DELAY_MS * 2 ** (syncState.failures - 1),
+    SYNC_MAX_DELAY_MS
+  );
+  syncState.nextAttemptAt = Date.now() + delay;
+}
+
+/**
+ * Push queued sessions to the server.
+ *
+ * Fire and forget. Called on the browser's `online` event, on boot, and after
+ * every logged round. Nothing in the UI waits for it, and nothing the patient
+ * does depends on it succeeding — the queue is the state, and difficulty is a
+ * formula that never needed the network.
  */
 export async function runSyncOnReconnect() {
   if (!getToken()) return;
 
-  const {
-    getActivePatientId,
-    getUnsyncedSessions,
-    markSessionsSynced,
-    getServerPatientId,
-    saveAIPlan,
-  } = await import("./db");
+  // Give up rather than hammer. Something that knows better — the `online`
+  // event, a login — calls resetSyncBackoff() to start us again.
+  if (syncState.failures >= SYNC_MAX_ATTEMPTS) return;
+  if (Date.now() < syncState.nextAttemptAt) return;
 
-  const activePatientId = await getActivePatientId();
-  const serverPatientId = await getServerPatientId();
+  // One at a time. Eighteen rounds finishing in quick succession must not put
+  // eighteen overlapping pushes of the same queue on the wire.
+  if (syncState.inFlight) return;
+  syncState.inFlight = true;
 
-  // Only the active patient's rows: theirs is the only server identity we
-  // know. Rounds from other local profiles (e.g. the Demo patient) must not
-  // be attached to this patient's server record.
-  const unsynced = (await getUnsyncedSessions()).filter(
-    (row) => row.patientId === activePatientId
-  );
+  try {
+    const {
+      getActivePatientId,
+      getUnsyncedSessions,
+      markSessionsSynced,
+      getServerPatientId,
+    } = await import("./db");
 
-  if (unsynced.length && serverPatientId) {
+    const activePatientId = await getActivePatientId();
+    const serverPatientId = await getServerPatientId();
+
+    // Only the active patient's rows: theirs is the only server identity we
+    // know. Rounds from other local profiles (e.g. the Demo patient) must not
+    // be attached to this patient's server record.
+    const unsynced = (await getUnsyncedSessions()).filter(
+      (row) => row.patientId === activePatientId
+    );
+
+    if (!unsynced.length || !serverPatientId) return;
+
     try {
       const rows = unsynced.map((row) => ({ ...row, serverPatientId }));
       const result = await syncSessions(rows);
@@ -412,15 +477,12 @@ export async function runSyncOnReconnect() {
         // them synced stops the queue from resending them forever.
         await markSessionsSynced(unsynced.map((row) => row.id));
       }
+      resetSyncBackoff();
     } catch {
-      // Stays queued. Retries on the next reconnect — the queue is the state.
+      // Stays queued, and the next attempt waits longer than this one did.
+      noteSyncFailure();
     }
-  }
-
-  // Refresh the cached plan while there is signal, so the next offline
-  // stretch adapts on current guidance rather than last week's.
-  if (serverPatientId) {
-    const plan = await fetchDifficultyPlan(serverPatientId);
-    if (plan) await saveAIPlan(plan);
+  } finally {
+    syncState.inFlight = false;
   }
 }

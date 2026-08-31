@@ -50,7 +50,7 @@ def read_constant(path: Path, name: str) -> int:
 
 # ── 1. The two scale modules agree ───────────────────────────────────────────
 
-for name in ("MIN_LEVEL", "MAX_LEVEL"):
+for name in ("MIN_LEVEL", "MAX_LEVEL", "STARTING_LEVEL"):
     js = read_constant(JS_SCALE, name)
     py = read_constant(PY_SCALE, name)
     if js != py:
@@ -58,9 +58,23 @@ for name in ("MIN_LEVEL", "MAX_LEVEL"):
 
 MIN_LEVEL = read_constant(PY_SCALE, "MIN_LEVEL")
 MAX_LEVEL = read_constant(PY_SCALE, "MAX_LEVEL")
+STARTING_LEVEL = read_constant(PY_SCALE, "STARTING_LEVEL")
 
 if (MIN_LEVEL, MAX_LEVEL) != (0, 15):
     failures.append(f"scale is {MIN_LEVEL}-{MAX_LEVEL}, spec says 0-15")
+
+# The starting level is what an uncalibrated patient plays at. Pinned off both
+# ends on purpose: MIN_LEVEL is the bug this constant exists to fix (level 0
+# emits no no-go stimulus and highlights the executive answer, so every domain
+# scores a constant 1.0), and MAX_LEVEL is the "never start everyone at 15" the
+# spec rules out. Anywhere strictly between is a judgement call; either end is
+# a regression.
+if not MIN_LEVEL < STARTING_LEVEL < MAX_LEVEL:
+    failures.append(
+        f"STARTING_LEVEL={STARTING_LEVEL} must sit strictly inside "
+        f"{MIN_LEVEL}-{MAX_LEVEL}: the floor measures nothing, the ceiling is "
+        f"the 'never start everyone at 15' the spec forbids"
+    )
 
 
 def read_content_ceilings(path: Path) -> dict[str, int]:

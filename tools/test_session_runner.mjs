@@ -12,6 +12,7 @@ import {
   DAILY_CAP_MS,
   ITEMS_PER_DOMAIN,
   ITEMS_PER_SESSION,
+  itemsForDomain,
   LOCK,
   SESSIONS_PER_DAY,
   SESSION_GAP_MS,
@@ -47,13 +48,19 @@ const levels = Object.fromEntries(DOMAINS.map((d) => [d, 5]));
     buildSessionItems({ select: selectItem, levels, seed: 99, shuffle: seededShuffle });
 
   const first = build();
-  eq("a session holds all six domains x 2 items", first.length, ITEMS_PER_SESSION);
-  eq("that is 12", first.length, 12);
+  eq("a session holds all six domains x itemsForDomain", first.length, ITEMS_PER_SESSION);
+  eq("that is 16", first.length, 16);
 
   const perDomain = {};
   for (const it of first) perDomain[it.domain] = (perDomain[it.domain] ?? 0) + 1;
-  ok("every domain appears exactly twice",
-     DOMAINS.every((d) => perDomain[d] === ITEMS_PER_DOMAIN), JSON.stringify(perDomain));
+  ok("every domain appears exactly itemsForDomain times",
+     DOMAINS.every((d) => perDomain[d] === itemsForDomain(d)), JSON.stringify(perDomain));
+  // Attention is the only exception, and the default is untouched.
+  eq("attention is capped at one item", itemsForDomain("attention"), 1);
+  ok("every other domain keeps the default of three",
+     DOMAINS.filter((d) => d !== "attention").every((d) => itemsForDomain(d) === ITEMS_PER_DOMAIN),
+     "a non-attention domain drifted off the default");
+  eq("the default is still three", ITEMS_PER_DOMAIN, 3);
   ok("the order is shuffled, not domain-by-domain",
      new Set(first.slice(0, 6).map((i) => i.domain)).size > 1,
      "first six items are all one domain");
@@ -69,7 +76,7 @@ const levels = Object.fromEntries(DOMAINS.map((d) => [d, 5]));
      JSON.stringify(first), JSON.stringify(frozen));
   ok("item 4 is untouched after item 3 is answered wrong",
      JSON.stringify(first[3]) === JSON.stringify(frozen[3]));
-  eq("all twelve were answered", answers.length, 12);
+  eq("every item in the frozen list was answered", answers.length, ITEMS_PER_SESSION);
 
   // Rebuilding with the same seed is identical; that is what lets a resumed
   // session be the same session.

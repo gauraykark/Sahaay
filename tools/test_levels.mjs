@@ -12,7 +12,9 @@ import {
   UNCALIBRATED,
   clampLevel,
   contentMaxLevel,
+  STARTING_LEVEL,
   isLevel,
+  levelForPlay,
   levelOrNull,
   stepBounded,
 } from "../shared/levels.js";
@@ -84,6 +86,40 @@ check("MAX_LEVEL is reachable", stepBounded(99, 14, "faces"), 15);
 // simply a clamp.
 check("above the scale clamps to the top", stepBounded(16, 15, "recall"), 15);
 check("holding at the top holds", stepBounded(15, 15, "recall"), 15);
+
+// ── The uncalibrated starting level ─────────────────────────────────────────
+//
+// Serving MIN_LEVEL to an uncalibrated patient is the bug this section exists
+// to keep out. At level 0 generateAttention emits noGoRatio 0 -- no red
+// stimulus at all, so the instruction lies and every tap scores -- and
+// buildExecutive falls to three steps with the next one highlighted. Six
+// domains then score a constant 1.0, and a flat line from a task nobody can
+// fail is indistinguishable from a flat line from a patient who is fine.
+
+check("uncalibrated plays at STARTING_LEVEL, not the floor", levelForPlay(null), STARTING_LEVEL);
+check("undefined is uncalibrated too", levelForPlay(undefined), STARTING_LEVEL);
+ok(
+  "STARTING_LEVEL is not the floor -- that floor measures nothing",
+  STARTING_LEVEL > MIN_LEVEL,
+  `STARTING_LEVEL is ${STARTING_LEVEL}`
+);
+ok(
+  "STARTING_LEVEL is not the ceiling -- the spec forbids starting everyone at 15",
+  STARTING_LEVEL < MAX_LEVEL,
+  `STARTING_LEVEL is ${STARTING_LEVEL}`
+);
+ok("STARTING_LEVEL is a real level", isLevel(STARTING_LEVEL));
+
+// The whole point of the null/0 distinction: a MEASURED zero is honoured. A
+// patient at the bottom of the scale still plays at the bottom of the scale.
+check("a measured 0 still plays at 0, not at STARTING_LEVEL", levelForPlay(0), 0);
+check("a measured level passes straight through", levelForPlay(11), 11);
+check("levelForPlay bounds a silly number", levelForPlay(99), MAX_LEVEL);
+
+// levelForPlay must not write anything back. It resolves at BUILD time only,
+// so getDomainLevels() keeps returning null and the report can still say
+// "not calibrated" rather than reporting a level nobody measured.
+check("levelOrNull is untouched by levelForPlay existing", levelOrNull(null), UNCALIBRATED);
 
 for (const name of passed) console.log(`  PASS  ${name}`);
 for (const line of failed) console.log(`  FAIL  ${line}`);

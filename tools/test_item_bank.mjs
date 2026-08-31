@@ -14,6 +14,7 @@ import {
   bankDepth,
   bankFor,
   eligibleItems,
+  executiveStepsWanted,
   generateAttention,
   generatePerceptualMotor,
   isBanked,
@@ -243,6 +244,77 @@ eq("generateAttention(0) has no no-go stimuli", generateAttention(0).noGoCount, 
   eq("memory used its own level", mixed.find((m) => m.item.domain === "memory").item.level, 15);
   eq("attention used its own level", mixed.find((m) => m.item.domain === "attention").item.level, 0);
 }
+
+// ── Executive difficulty tracks the level, not the luck of the draw ─────────
+//
+// Every routine is eligible to the top of the scale so the rotation pool stays
+// deep. That alone let a three-step routine be served at level 9, where
+// buildExecutive can trim but never extend -- the ordering decision was
+// trivial whatever the level, so the level had stopped controlling difficulty.
+// The selector now prefers routines long enough to fill the level.
+
+for (const l of LEVELS) {
+  const served = [];
+  for (let s = 0; s < 25; s += 1) {
+    served.push(selectItem({ domain: "executive", level: l, recentIds: new Set(), seed: s }).item);
+  }
+  const wanted = executiveStepsWanted(l);
+  ok(`level ${l}: a fresh pick fills the level (${wanted} steps)`,
+     served.every((it) => it.steps.length === wanted),
+     `served ${[...new Set(served.map((it) => it.steps.length))].join("/")}, wanted ${wanted}`);
+}
+
+ok("a higher level presents strictly more steps than a lower one",
+   executiveStepsWanted(15) > executiveStepsWanted(7) &&
+   executiveStepsWanted(7) > executiveStepsWanted(0));
+
+ok("even the bottom of the scale has an ordering decision to make",
+   executiveStepsWanted(0) >= 3, `${executiveStepsWanted(0)} steps at level 0`);
+
+// The answer is never marked from the start any more. hintAfterMs is a DELAY:
+// the patient decides first, and the cue arrives only if they pause.
+{
+  const low = selectItem({ domain: "executive", level: 0, recentIds: new Set(), seed: 1 }).item;
+  const high = selectItem({ domain: "executive", level: 15, recentIds: new Set(), seed: 1 }).item;
+  ok("no item marks the next step from the start", low.showNextHint === undefined);
+  ok("full cue delays the hint rather than showing it", low.hintAfterMs > 0);
+  ok("the top of the scale offers no hint at all", high.hintAfterMs === null);
+  ok("nothing is pre-placed", low.prePlaced === 0 && high.prePlaced === 0);
+}
+
+// The rotation pool must not have been narrowed to buy that difficulty -- a
+// shallow pool means the patient memorises the routine, which is the exact
+// failure the 14-day rule exists to prevent.
+{
+  const seen = new Set();
+  let distinct = 0;
+  for (let i = 0; i < 40; i += 1) {
+    const { item, exhausted } = selectItem({ domain: "executive", level: 7, recentIds: seen, seed: i * 7 });
+    if (exhausted) break;
+    seen.add(item.id);
+    distinct += 1;
+  }
+  ok("the fit preference costs no rotation depth",
+     distinct >= 20, `only ${distinct} distinct routines before a repeat`);
+}
+
+// ── The attention instruction describes the actual stimulus set ─────────────
+//
+// "Tap the green circle. Leave the red one" was shown at every level, but
+// below level 3 noGoRatio is 0 and no red circle is ever drawn. The patient
+// spends the round watching for something that never arrives, and that
+// confusion gets scored as inattention. The prompt key is derived from
+// noGoCount so the two cannot drift apart.
+
+for (const l of LEVELS) {
+  const a = generateAttention(l);
+  const wants = a.noGoCount > 0 ? "ask_tap_green" : "ask_tap_all";
+  eq(`level ${l}: prompt matches the stimulus set`, a.promptKey, wants);
+}
+ok("a level with no red does not promise red",
+   generateAttention(0).promptKey === "ask_tap_all");
+ok("a level with red does mention it",
+   generateAttention(15).promptKey === "ask_tap_green");
 
 // ── No timers, ever ──────────────────────────────────────────────────────────
 

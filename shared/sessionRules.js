@@ -13,10 +13,47 @@
 // only number this app produces.
 
 import { DOMAINS } from "./domains.js";
+import { levelForPlay } from "./levels.js";
 
 export const SESSIONS_PER_DAY = 2;
-export const ITEMS_PER_DOMAIN = 2;
-export const ITEMS_PER_SESSION = DOMAINS.length * ITEMS_PER_DOMAIN; // 12
+
+// The DEFAULT, three per domain, not two. Two items x six domains measured out
+// at roughly six minutes of real play at a mid-scale level -- against a
+// ten-minute target, and a session that short costs a third of the daily dose.
+// Three lands near ten, and stays there with the attention exception below,
+// which trades that domain's two extra items for a shorter block rather than
+// for other content. The day comes in inside DAILY_CAP_MS either way, and the
+// cap still bites before fatigue does.
+//
+// This is also the cheapest lever on measurement quality. One item per domain
+// per session is one sample; a third sample per day is a materially steadier
+// daily score for the seven-day pattern to read, and the pattern is the only
+// thing that moves a base level.
+export const ITEMS_PER_DOMAIN = 3;
+
+// Attention is the one exception, and it is a length exception rather than a
+// measurement one. A go/no-go item is the only item in the app whose duration
+// is set by the generator instead of by how fast the patient answers: every
+// trial can run the full response window, so the block costs the same whether
+// the patient is quick or slow. Three of them at a mid-scale level ran about
+// ninety seconds -- a third of the session for a sixth of the domains, which
+// pushed everything else out of the ten-minute target.
+//
+// One item still yields a daily score for attention, so the domain keeps its
+// point on every trend line; it is a single sample per session rather than
+// three, which the seven-day pattern absorbs. Every other domain keeps three,
+// and the default stays three so a domain added later inherits it.
+export const ITEMS_PER_DOMAIN_OVERRIDES = { attention: 1 };
+
+/** How many items of `domain` one session holds. */
+export function itemsForDomain(domain) {
+  return ITEMS_PER_DOMAIN_OVERRIDES[domain] ?? ITEMS_PER_DOMAIN;
+}
+
+export const ITEMS_PER_SESSION = DOMAINS.reduce(
+  (n, d) => n + itemsForDomain(d),
+  0
+); // 16
 
 /** Rolling gap from the END of the previous session, never a clock time. */
 export const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
@@ -152,7 +189,7 @@ function startOfNextDay(now) {
  * level in seven days; they change nothing inside the session. If struggling
  * changed what came next, the patient would be punished for struggling.
  *
- * Every session contains all six domains, shuffled, ITEMS_PER_DOMAIN each.
+ * Every session contains all six domains, shuffled, itemsForDomain() each.
  * Not "today is memory day" -- everything, every session, so all six lines on
  * the trend graph get a point.
  *
@@ -162,9 +199,11 @@ export function buildSessionItems({ select, levels, recentIdsByDomain = {}, seed
   const picked = [];
 
   for (const domain of DOMAINS) {
-    const level = levels?.[domain] ?? 0;
+    // Uncalibrated resolves to STARTING_LEVEL, not to the floor. `?? 0` here
+    // was what served every new patient a level-0 session in all six domains.
+    const level = levelForPlay(levels?.[domain]);
     const used = new Set(recentIdsByDomain[domain] ?? []);
-    for (let n = 0; n < ITEMS_PER_DOMAIN; n += 1) {
+    for (let n = 0; n < itemsForDomain(domain); n += 1) {
       const { item } = select({ domain, level, recentIds: used, seed: seed + picked.length });
       used.add(item.id);
       picked.push(item);

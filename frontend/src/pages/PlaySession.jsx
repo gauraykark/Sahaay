@@ -19,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 
 import { selectItem } from "@shared/itemBank";
 import { seededShuffle } from "@shared/itemBank";
-import { MIN_LEVEL } from "@shared/levels";
+import { levelForPlay } from "@shared/levels";
 import {
   ITEMS_PER_SESSION,
   LOCK,
@@ -98,7 +98,11 @@ export default function PlaySession() {
       const items = buildSessionItems({
         select: selectItem,
         levels: Object.fromEntries(
-          DOMAINS.map((d) => [d, levels[d] ?? MIN_LEVEL])
+          // Stored levels stay as they are -- nulls and all -- on the session
+          // row below. Only what the items are BUILT at resolves here, so an
+          // uncalibrated patient plays a real session without the record
+          // claiming somebody measured them.
+          DOMAINS.map((d) => [d, levelForPlay(levels[d])])
         ),
         recentIdsByDomain,
         seed,

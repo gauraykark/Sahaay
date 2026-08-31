@@ -28,6 +28,23 @@ MAX_LEVEL = 15
 #: A patient who has never been calibrated. Distinct from ``MIN_LEVEL``.
 UNCALIBRATED = None
 
+#: Where an uncalibrated patient PLAYS until something measures them.
+#:
+#: Not a level anybody has been assigned -- the level the games are built at
+#: when the store says ``None``, and deliberately not ``MIN_LEVEL``. Serving 0
+#: to an uncalibrated patient made every domain score a near-constant 1.0:
+#: attention emitted no red stimulus at all, executive fell to three steps with
+#: the answer highlighted. Six trend lines measuring nothing look exactly like
+#: six trend lines from a patient who is doing fine.
+#:
+#: Mid-scale is the honest placeholder. Calibration (spec section 3) starts high
+#: and drops fast; until it exists, the middle is wrong by at most a few steps
+#: in either direction and the weekly evaluator can walk a patient to their real
+#: level from here. The floor is wrong by up to fifteen and only walks up.
+#:
+#: INTERIM -- mirrors ``STARTING_LEVEL`` in shared/levels.js. Change both.
+STARTING_LEVEL = 7
+
 
 def is_level(value: object) -> bool:
     """True only for a real level: an int inside ``[MIN_LEVEL, MAX_LEVEL]``."""

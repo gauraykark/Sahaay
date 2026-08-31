@@ -15,8 +15,8 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { DOMAINS } from "@shared/domains";
 import { selectItem } from "@shared/itemBank";
-import { MIN_LEVEL } from "@shared/levels";
-import { ITEMS_PER_DOMAIN } from "@shared/sessionRules";
+import { levelForPlay } from "@shared/levels";
+import { itemsForDomain } from "@shared/sessionRules";
 
 import ItemStage from "../components/games/ItemStage";
 import { getDomainLevel, logGameSession, recentItemIds } from "../lib/db";
@@ -37,11 +37,11 @@ export default function PlayDomain() {
     if (!valid) return undefined;
     let cancelled = false;
     (async () => {
-      const level = (await getDomainLevel(domain)) ?? MIN_LEVEL;
+      const level = levelForPlay(await getDomainLevel(domain));
       const seen = await recentItemIds(domain);
       const picked = [];
       const used = new Set(seen);
-      for (let i = 0; i < ITEMS_PER_DOMAIN; i += 1) {
+      for (let i = 0; i < itemsForDomain(domain); i += 1) {
         const { item } = selectItem({ domain, level, recentIds: used, seed: Date.now() + i });
         used.add(item.id);
         picked.push(item);

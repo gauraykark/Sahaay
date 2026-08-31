@@ -43,6 +43,9 @@ run "item bank + rotation" node tools/test_item_bank.mjs
 run "session runner + gating" node tools/test_session_runner.mjs
 run "tailwind colours resolve" node tools/test_tailwind_colors.mjs
 run "voice: once, right language" node tools/test_voice.mjs
+run "sync backs off when the server is down" node tools/test_sync_backoff.mjs
+run "go/no-go responds to a tap" node tools/test_gonogo_response.mjs
+run "schema drift + CORS on errors" "$PY" tools/test_schema_sync.py
 
 echo
 if [ "$status" -ne 0 ]; then
