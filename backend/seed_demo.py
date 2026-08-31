@@ -35,6 +35,7 @@ from app.models import (
 random.seed(26003)  # reproducible — the demo looks the same every run
 
 PASSWORD = "sahaay123"
+MEMORY_GAME = "recall" if "recall" in GAME_TYPES else "memory"
 
 # name, age, stage, profile, caregiver name
 PEOPLE = [
@@ -197,7 +198,7 @@ def seed_real_caseload(db, doctor) -> None:
                         domain=domain_for_game(game),
                         score=score,
                         total=total,
-                        moves=random.randint(6, 22) if game == "memory" else None,
+                        moves=random.randint(6, 22) if game == MEMORY_GAME else None,
                         errors=total - score,
                         level=level,
                         new_level=new_level,
@@ -229,14 +230,14 @@ def seed_real_caseload(db, doctor) -> None:
         # One sharply bad round, most recent of all, so the z-score against
         # this patient's own baseline trips the "Sudden drop" panel.
         if profile == "sharp-drop":
-            crash_from = levels["memory"]
+            crash_from = levels[MEMORY_GAME]
             crash_to = max(1, crash_from - 1)
             db.add(
                 GameSession(
                     patient_id=patient.id,
                     dexie_id=None,
-                    game_type="memory",
-                    domain=domain_for_game("memory"),
+                    game_type=MEMORY_GAME,
+                    domain=domain_for_game(MEMORY_GAME),
                     score=1,
                     total=6,
                     moves=26,
@@ -255,8 +256,8 @@ def seed_real_caseload(db, doctor) -> None:
                 db.add(
                     DifficultyHistory(
                         patient_id=patient.id,
-                        game_type="memory",
-                        domain=domain_for_game("memory"),
+                        game_type=MEMORY_GAME,
+                        domain=domain_for_game(MEMORY_GAME),
                         from_level=crash_from,
                         to_level=crash_to,
                         reason="We'll take it a little gentler next time.",
@@ -392,7 +393,7 @@ def seed() -> None:
                             domain=domain_for_game(game),
                             score=score,
                             total=total,
-                            moves=random.randint(6, 22) if game == "memory" else None,
+                            moves=random.randint(6, 22) if game == MEMORY_GAME else None,
                             errors=total - score,
                             level=level,
                             new_level=new_level,
