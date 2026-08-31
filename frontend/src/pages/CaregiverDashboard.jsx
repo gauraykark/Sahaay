@@ -907,10 +907,37 @@ function AddPatientForm({ onCreated, onCancel }) {
  * already been synced (has a serverId) — a failed remote push never blocks
  * the local change.
  */
+/**
+ * Sets the language patient-facing screens speak and display in. Writes to
+ * the local Dexie patient row first (works offline, takes effect
+ * immediately), then best-effort pushes to the server if this patient has
+ * already been synced (has a serverId) — a failed remote push never blocks
+ * the local change.
+ */
+const STATUS_META = {
+  verified: { dot: "bg-green-500", suffix: "", note: null },
+  review: {
+    dot: "bg-amber-500",
+    suffix: " (needs review)",
+    note: "Translated, but not yet checked by a native speaker.",
+  },
+  draft: {
+    dot: "bg-amber-500",
+    suffix: " (draft, low confidence)",
+    note: "An early-pass translation — some phrasing may be inaccurate. Needs native review before relying on it.",
+  },
+  untranslated: {
+    dot: "bg-neutral-300",
+    suffix: " (not yet translated)",
+    note: "This language isn't translated yet — the patient will see English text until it's added.",
+  },
+};
+
 function LanguageCard({ patient, onChanged }) {
   const [isSaving, setIsSaving] = useState(false);
   const current = patient?.preferredLanguage || "en";
   const currentOption = LANGUAGE_OPTIONS.find((opt) => opt.code === current);
+  const currentMeta = STATUS_META[currentOption?.status] || STATUS_META.untranslated;
 
   const handleChange = async (event) => {
     const preferredLanguage = event.target.value;
@@ -940,25 +967,30 @@ function LanguageCard({ patient, onChanged }) {
         Games, greetings, and voice are spoken in this language on the
         patient's device.
       </p>
-      <select
-        value={current}
-        onChange={handleChange}
-        disabled={isSaving || !patient}
-        className="w-full rounded-lg border border-neutral-300 px-4 py-3 text-neutral-800
-          focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
-      >
-        {LANGUAGE_OPTIONS.map((opt) => (
-          <option key={opt.code} value={opt.code}>
-            {opt.label}
-            {opt.verified ? "" : " (not yet translated)"}
-          </option>
-        ))}
-      </select>
-      {currentOption && !currentOption.verified && (
-        <p className="text-xs text-amber-700 mt-2">
-          This language isn't translated yet — the patient will see English
-          text until it's reviewed.
-        </p>
+
+      <div className="relative">
+        <span
+          className={`absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${currentMeta.dot}`}
+          aria-hidden="true"
+        />
+        <select
+          value={current}
+          onChange={handleChange}
+          disabled={isSaving || !patient}
+          className="w-full rounded-lg border border-neutral-300 pl-8 pr-4 py-3 text-neutral-800
+            focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
+        >
+          {LANGUAGE_OPTIONS.map((opt) => (
+            <option key={opt.code} value={opt.code}>
+              {opt.label}
+              {STATUS_META[opt.status]?.suffix || ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {currentMeta.note && (
+        <p className="text-xs text-amber-700 mt-2">{currentMeta.note}</p>
       )}
     </>
   );

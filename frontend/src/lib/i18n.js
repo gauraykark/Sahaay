@@ -28,17 +28,16 @@ export const DEFAULT_LANGUAGE = "en";
 // `verified: true` means a native speaker has reviewed the full dictionary;
 // `false` means it's currently an English-fallback stub — see the blocks below.
 export const LANGUAGE_OPTIONS = [
-  { code: "en", label: "English", verified: true },
-  { code: "as", label: "Assamese (অসমীয়া)", verified: true },
-  { code: "hi", label: "Hindi (हिन्दी)", verified: false },
-  { code: "bn", label: "Bengali (বাংলা)", verified: false },
-  { code: "kha", label: "Khasi", verified: false },
-  { code: "mni", label: "Meitei / Manipuri (মৈতৈলোন্)", verified: false },
-  { code: "lus", label: "Mizo / Lushai", verified: false },
-  { code: "nqo", label: "Konyak", verified: false },
-  { code: "njz", label: "Nyishi / Dafla", verified: false },
+  { code: "en", label: "English", status: "verified" },
+  { code: "as", label: "Assamese (অসমীয়া)", status: "verified" },
+  { code: "hi", label: "Hindi (हिन्दी)", status: "review" },
+  { code: "bn", label: "Bengali (বাংলা)", status: "review" },
+  { code: "mni", label: "Meitei / Manipuri (মৈতৈলোন্)", status: "draft" },
+  { code: "lus", label: "Mizo / Lushai", status: "draft" },
+  { code: "kha", label: "Khasi", status: "untranslated" },
+  { code: "nqo", label: "Konyak", status: "untranslated" },
+  { code: "njz", label: "Nyishi / Dafla", status: "untranslated" },
 ];
-
 const strings = {
   en: {
     greeting_morning: "Good morning",
@@ -420,3 +419,268 @@ export function useT() {
     return value;
   };
 }
+
+// ── Bengali — first-pass translation, needs native review before shipping ──
+strings.bn = {
+  greeting_morning: "শুভ সকাল",
+  greeting_afternoon: "শুভ অপরাহ্ন",
+  greeting_evening: "শুভ সন্ধ্যা",
+  welcome_back: "ফিরে আসার জন্য স্বাগতম",
+  choose_activity: "একটি কার্যকলাপ বেছে নিন",
+  your_day: "আপনার দিন",
+  exit: "বেরিয়ে যান",
+
+  people_you_know: "আপনার পরিচিত মানুষ",
+  people_desc: "চেনা মুখ দেখুন, বা জিজ্ঞাসা করুন কেউ কে",
+  memory_matching: "স্মৃতি মেলানো",
+  memory_desc: "পরিচিত জিনিস ও ছবি মেলান",
+  daily_routine: "দৈনন্দিন রুটিন",
+  routine_desc: "দৈনন্দিন কাজের ক্রম মনে রাখুন",
+  object_recognition: "বস্তু চেনা",
+  objects_desc: "আপনার চারপাশের সাধারণ জিনিস চিনুন",
+  name_recall: "নাম মনে করা",
+  name_recall_desc: "পরিচিত মানুষ ও জায়গার নাম মনে রাখুন",
+
+  // UNVERIFIED — needs native review.
+  domain_attention: "মনোযোগ",
+  domain_executive: "পরিকল্পনা ও ক্রম",
+  domain_memory: "স্মৃতি",
+  domain_language: "শব্দ ও নামকরণ",
+  domain_perceptual_motor: "আকৃতি ও স্থান",
+  domain_social: "মানুষ ও অনুভূতি",
+
+  // ── Games ──────────────────────────────────────────────────────────────
+  play: "খেলুন",
+  stop: "থামুন",
+  well_done_today: "আজ খুব ভালো করেছেন",
+  thats_it: "এটাই",
+  lets_look_together: "চলুন একসাথে এটা দেখি",
+  next: "পরবর্তী",
+  ready: "প্রস্তুত?",
+  start: "শুরু করুন",
+  remember_these: "এগুলো দেখুন",
+  now_answer: "এখন, একটি প্রশ্ন",
+
+  ask_which_did_you_see: "আপনি কোনটি দেখেছিলেন?",
+  ask_what_is_this: "এটাকে কী বলে?",
+  ask_how_feeling: (pronoun) => `${pronoun} কেমন অনুভব করছেন?`,
+  ask_put_in_order: "আপনি যেভাবে করেন সেই ক্রমে সাজান",
+  ask_match_shape: "মিলে যাওয়া আকৃতিতে চাপ দিন",
+  ask_tap_green: "সবুজ বৃত্তে চাপ দিন। লাল বৃত্তটি ছেড়ে দিন",
+  ask_tap_all: "প্রতিটি বৃত্তে চাপ দিন",
+
+  he: "তিনি",
+  she: "তিনি",
+
+  emotion_angry: "রাগান্বিত", emotion_calm: "শান্ত", emotion_happy: "খুশি",
+  emotion_sad: "দুঃখিত", emotion_surprised: "অবাক", emotion_worried: "চিন্তিত",
+
+  obj_banana: "কলা", obj_basket: "ঝুড়ি", obj_bicycle: "সাইকেল",
+  obj_bucket: "বালতি", obj_clock: "ঘড়ি", obj_coconut: "নারকেল",
+  obj_comb: "চিরুনি", obj_cow: "গরু", obj_fish: "মাছ",
+  obj_jackfruit: "কাঁঠাল", obj_kettle: "কেটলি", obj_lamp: "প্রদীপ",
+  obj_plate: "থালা", obj_pot: "হাঁড়ি", obj_rice: "ভাত",
+  obj_slippers: "চপ্পল", obj_soap: "সাবান", obj_spoon: "চামচ",
+  obj_teacup: "চায়ের কাপ", obj_umbrella: "ছাতা",
+
+  shape_circle: "বৃত্ত", shape_square: "বর্গক্ষেত্র", shape_triangle: "ত্রিভুজ",
+  shape_diamond: "হীরক", shape_hexagon: "ষড়ভুজ", shape_star: "তারা",
+
+  next_games_at: (time) => `পরবর্তী খেলা ${time} সময়ে`,
+  come_back_later: "আপনি আজ খেলেছেন। পরে আসুন।",
+
+  my_day: "আমার দিন",
+  my_day_desc: "আপনার ওষুধ, পানি, খাবার এবং সাক্ষাৎ",
+  nothing_today: "এখন করার কিছু নেই",
+  mark_done: "হয়ে গেছে",
+  all_done_today: "আজকের সব কাজ শেষ",
+
+  speak_greeting: (greeting) =>
+    `${greeting}। ফিরে আসার জন্য স্বাগতম। প্রস্তুত হলে একটি কার্যকলাপ বেছে নিন।`,
+  this_is: (name, relationship) =>
+    `ইনি ${name}। ${relationship || ""}`.trim(),
+  not_sure_who: "আমি এখনও নিশ্চিত নই ইনি কে।",
+};
+
+// ── Meitei / Manipuri — first-pass translation, LOW CONFIDENCE.
+// This is a lower-resource language for me; several game/domain terms are
+// best-effort renderings, not idiomatic phrasing a Manipuri clinician or
+// caregiver would necessarily use. Do not ship to a real patient without a
+// native speaker reading through every line.
+strings.mni = {
+  greeting_morning: "নুংথিল ফৌবা",
+  greeting_afternoon: "নুমিৎ ফৌবা",
+  greeting_evening: "নুংশিত ফৌবা",
+  welcome_back: "হালহনবা ওকচরি",
+  choose_activity: "থৌদাং অमा খল্লু",
+  your_day: "নহাক্কী নুমিৎ",
+  exit: "থোরক্কনু",
+
+  people_you_know: "নহাক্না খংবা মিয়ামগী",
+  people_desc: "মমী খংবা মায় য়েংবিয়ু, নত্রগা কনানো হায়না হংবিয়ু",
+  memory_matching: "নিংশিং চন্নবা",
+  memory_desc: "খংবা পোৎলোন অমসুং ফটোশিং চন্নবিয়ু",
+  daily_routine: "নুমিৎখুদিংগী থৌরাং",
+  routine_desc: "নুমিৎখুদিংগী থৌরাংগী মথৌ নিংশিংবিয়ু",
+  object_recognition: "পোৎলোন খংবা",
+  objects_desc: "নহাক্কী মপান্দা লৈবা পোৎলোনশিং খংবিয়ু",
+  name_recall: "মিং নিংশিংবা",
+  name_recall_desc: "খংবা মিয়ামগা মফমশিংগী মিং নিংশিংবিয়ু",
+
+  // UNVERIFIED — LOW CONFIDENCE, needs native review.
+  domain_attention: "থৌনা য়েংবা",
+  domain_executive: "থৌराংগী মথৌ",
+  domain_memory: "নিংশিংবা",
+  domain_language: "লোন অমসুং মিং",
+  domain_perceptual_motor: "মখল অমসুং মফম",
+  domain_social: "মিয়াম অমসুং পুক্নিং",
+
+  play: "শানৌ",
+  stop: "লেপ্পু",
+  well_done_today: "ঙসি ফবা তৌখ্রে",
+  thats_it: "মসিনি",
+  lets_look_together: "মপুংফাওবা য়েংশি",
+  next: "মথং",
+  ready: "থৌগৎলবরা?",
+  start: "হৌ",
+  remember_these: "মসিশিং য়েংবিয়ু",
+  now_answer: "হৌজিক, ওয়াহং অমা",
+
+  ask_which_did_you_see: "নহাক্না করিগুম্বা উবা?",
+  ask_what_is_this: "মসিদা করি কৌবগে?",
+  ask_how_feeling: (pronoun) => `${pronoun}না করমনা পুক্নিং তৌরিবগে?`,
+  ask_put_in_order: "নহাক্না তৌবা মানুংদা থমজৌ",
+  ask_match_shape: "চন্নরকপা মখল অদুদা থীন্নবিয়ু",
+  ask_tap_green: "অশাংবা সর্কেলদা থীন্নবিয়ু। অংগাংবা অদু হায়ফম্মু",
+  ask_tap_all: "সর্কেল খুদিংমক থীন্নবিয়ু",
+
+  he: "মহাক্না",
+  she: "মহাক্না",
+
+  emotion_angry: "সাউবা", emotion_calm: "ঙাইথীবা", emotion_happy: "হরাউবা",
+  emotion_sad: "ওইবা", emotion_surprised: "অংকৌবা", emotion_worried: "থৌঙাংবা",
+
+  obj_banana: "লৈহাউ", obj_basket: "খুংগা", obj_bicycle: "চিংশাইকেল",
+  obj_bucket: "বালতি", obj_clock: "ফুংগা", obj_coconut: "মহৈরোই",
+  obj_comb: "চফু", obj_cow: "সানবী", obj_fish: "নুমা",
+  obj_jackfruit: "থেইনৌ", obj_kettle: "কেটলি", obj_lamp: "থাওমী",
+  obj_plate: "ফলেট", obj_pot: "চরুক", obj_rice: "চাক",
+  obj_slippers: "চপ্পল", obj_soap: "শাবোন", obj_spoon: "চামুচ",
+  obj_teacup: "চাগী কপ", obj_umbrella: "লুহুপ",
+
+  shape_circle: "সর্কেল", shape_square: "স্কোয়ার", shape_triangle: "ত্রিয়াংগেল",
+  shape_diamond: "ডায়মন্ড", shape_hexagon: "হেক্সাগন", shape_star: "থবি",
+
+  next_games_at: (time) => `মথং শানবগী ${time} তমক্তা`,
+  come_back_later: "নহাক্না ঙসি শানরে। মথং তরে হালল্লু।",
+
+  my_day: "ঐগী নুমিৎ",
+  my_day_desc: "নহাক্কী মানপাং, ঈশিং, চাক অমসুং য়েংবা",
+  nothing_today: "হৌজিক তৌগদবা করিও লৈতে",
+  mark_done: "লোইখ্রে",
+  all_done_today: "ঙসিগী পুম্নমক লোইখ্রে",
+
+  speak_greeting: (greeting) =>
+    `${greeting}। হালহনবা ওকচরি। থৌগৎলবা মতমদা থৌদাং অমা খনবিয়ু।`,
+  this_is: (name, relationship) =>
+    `মসি ${name}নি। ${relationship || ""}`.trim(),
+  not_sure_who: "ঐহাক্না হৌজিক ফাওবা মসি কনানো হায়বা খংদে।",
+};
+
+// ── Mizo / Lushai — first-pass translation, MODERATE-LOW CONFIDENCE.
+// Latin script, so less transliteration risk than the Meitei-script block
+// above, but game/clinical vocabulary here is still an approximation.
+// Needs a native Mizo speaker's review before shipping.
+strings.lus = {
+  greeting_morning: "Chibai, Zing Ṭha",
+  greeting_afternoon: "Chibai, Chhun Ṭha",
+  greeting_evening: "Chibai, Tlai Ṭha",
+  welcome_back: "Kal leh chuan lawm kan ti che",
+  choose_activity: "Thil ti tur pakhat thlang rawh",
+  your_day: "I ni",
+  exit: "Chhuak",
+
+  people_you_know: "I Hriat Mite",
+  people_desc: "Hmai hriat tak en emaw, tumah po chu tunge tih zawt",
+  memory_matching: "Hriatna Zoem",
+  memory_desc: "Thil hriat leh mêl inzomkim zoem rawh",
+  daily_routine: "Ni tin Ṭante",
+  routine_desc: "Ni tin thil ti dan hun leh chu hre reng rawh",
+  object_recognition: "Thil Hriatna",
+  objects_desc: "I vêl thil azir azir hriat rawh",
+  name_recall: "Hming Hriat",
+  name_recall_desc: "Hriat mite leh hmun hmingte hre reng rawh",
+
+  // UNVERIFIED — needs native review.
+  domain_attention: "Ngaihsakna",
+  domain_executive: "Ruahmanna leh Ṭante",
+  domain_memory: "Hriatna",
+  domain_language: "Ṭawng leh Hming",
+  domain_perceptual_motor: "Chhinchhiahna leh Hmun",
+  domain_social: "Mite leh Rilru",
+
+  play: "Ṭante",
+  stop: "Ṭang rawh",
+  well_done_today: "Vawiin ṭha tak i ti",
+  thats_it: "Chu chu a ni",
+  lets_look_together: "Hetih hi en tur i",
+  next: "A dawt",
+  ready: "I inbuatsaih em?",
+  start: "Ṭan",
+  remember_these: "Hetih hi en teh",
+  now_answer: "Tunah, zawhna pakhat",
+
+  ask_which_did_you_see: "Eng nge i hmuh?",
+  ask_what_is_this: "Hei hi eng an tih?",
+  ask_how_feeling: (pronoun) => `${pronoun} rilru eng anga a awm?`,
+  ask_put_in_order: "I tih dan angin dah rawh",
+  ask_match_shape: "Chhinchhiah inzomkim chu khawih rawh",
+  ask_tap_green: "Circle hring khawih rawh. Sen chu chhuang mai",
+  ask_tap_all: "Circle nei zawng zawng khawih rawh",
+
+  he: "Ama",
+  she: "Ama",
+
+  emotion_angry: "Thinur", emotion_calm: "Mual", emotion_happy: "Lawm",
+  emotion_sad: "Lungngai", emotion_surprised: "Mak", emotion_worried: "Ngaihmawh",
+
+  obj_banana: "Balhla", obj_basket: "Bawm", obj_bicycle: "Bicycle",
+  obj_bucket: "Bucket", obj_clock: "Dâr", obj_coconut: " Artha",
+  obj_comb: "Sam ṭaite", obj_cow: "Sial", obj_fish: "Sangha",
+  obj_jackfruit: "Theipui", obj_kettle: "Kettle", obj_lamp: "Meivar",
+  obj_plate: "Plate", obj_pot: "Bel", obj_rice: "Buh",
+  obj_slippers: "Cherep", obj_soap: "Saphun", obj_spoon: "Spoon",
+  obj_teacup: "Tea no", obj_umbrella: "Sepbur",
+
+  shape_circle: "Vêlvang", shape_square: "Square", shape_triangle: "Triangle",
+  shape_diamond: "Diamond", shape_hexagon: "Hexagon", shape_star: "Arsi",
+
+  next_games_at: (time) => `Ṭante a dawt ${time}-ah`,
+  come_back_later: "Vawiin i ṭan tawh. Nakinah kal leh rawh.",
+
+  my_day: "Ka Ni",
+  my_day_desc: "I damdawi, tui, chaw leh hmuh tur",
+  nothing_today: "Tunah eng ti tur reng reng awm lo",
+  mark_done: "Ṭan zo",
+  all_done_today: "Vawiin thil zawng zawng ti zo",
+
+  speak_greeting: (greeting) =>
+    `${greeting}. Kal leh chuan lawm kan ti che. I inbuatsaih hunah thil ti tur thlang rawh.`,
+  this_is: (name, relationship) =>
+    `Hei hi ${name} a ni. ${relationship || ""}`.trim(),
+  not_sure_who: "He mi hi tunge a nih hriat ka nei tawh lo.",
+};
+
+// ── Khasi, Konyak, Nyishi — STILL UNVERIFIED STUBS. ─────────────────────
+//
+// Deliberately left as English-fallback clones rather than machine-guessed
+// translations. I do not have reliable enough training data on Khasi,
+// Konyak, or Nyishi to produce dementia-care phrasing I'd trust for a real
+// patient — a wrong word here (an emotion label, an instruction, "well
+// done") isn't a cosmetic bug, it's a comprehension failure for someone who
+// already has trouble parsing language. Get these translated by a native
+// speaker (or a vetted professional translation service) rather than
+// filling them in with a best guess.
+strings.kha = { ...strings.en };
+strings.nqo = { ...strings.en };
+strings.njz = { ...strings.en };
