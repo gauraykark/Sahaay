@@ -15,6 +15,7 @@ import {
   verifyCaregiverPin,
   listVaultPeople,
   addVaultPerson,
+  updateVaultPerson,
   deleteVaultPerson,
   listVaultRoutineSteps,
   addVaultRoutineStep,
@@ -22,8 +23,10 @@ import {
   setPreviewMode,
 } from "../lib/db";
 import { MAX_LEVEL, levelOrNull } from "@shared/levels";
+import { PERSON_FIELDS, filledFields } from "@shared/people";
 import { formatRelativeDay, describeSession } from "../lib/utils";
 import { DomainFlagBadge, SourceBadge } from "../components/ui/Badge";
+import PersonPhoto from "../components/ui/PersonPhoto";
 import { DomainMiniScore } from "../components/ui/DomainScore";
 import { getMe, getPatientProgress, hydratePatientsFromServer } from "../lib/api";
 import {
@@ -43,6 +46,7 @@ import {
   Heart,
   Sun,
   Trash,
+  PencilSimple,
   ArrowLeft,
   House,
   Gear,
@@ -793,11 +797,13 @@ function PatientDetailDashboard({
             <section className="area-names bg-white border border-neutral-200 rounded-xl px-5 py-5">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
                 <Heart size={16} />
-                People for Name Recall
+                My People
               </h2>
               <p className="text-sm text-neutral-500 mb-4">
-                Add family, the nurse, the milkman, and others. These names
-                appear in the matching Name Recall level.
+                Family, the nurse, the neighbour. Each one gets a card the
+                patient can look through. Only the name is required — fill in
+                what you know, skip the rest. Five to seven cards is about
+                right; past that it stops being family and becomes a list.
               </p>
               <VaultPeopleManager
                 people={vaultPeople}
@@ -986,37 +992,12 @@ function AddPatientForm({ onCreated, onCancel }) {
 }
 
 function VaultPeopleManager({ people, isLoading, onChanged }) {
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [relationship, setRelationship] = useState("");
-  const [photo, setPhoto] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handlePhotoChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed || isSaving) return;
-
-    setIsSaving(true);
-    await addVaultPerson({ name: trimmed, relationship: relationship.trim(), photo });
-    setName("");
-    setRelationship("");
-    setPhoto(null);
-    setIsSaving(false);
-    setShowForm(false);
-    onChanged();
-  };
+  // null = closed, "new" = adding, a number = editing that card.
+  const [editing, setEditing] = useState(null);
 
   const handleDelete = async (id) => {
     await deleteVaultPerson(id);
+    if (editing === id) setEditing(null);
     onChanged();
   };
 
@@ -1029,96 +1010,245 @@ function VaultPeopleManager({ people, isLoading, onChanged }) {
   }
 
   return (
-    <div className="space-y-3">
-      {people.map((person) => (
-        <div
-          key={person.id}
-          className="flex items-center gap-3 bg-white border border-neutral-200 rounded-lg px-5 py-3.5"
-        >
-          <div className="flex-1">
-            <p className="font-medium text-neutral-800">{person.name}</p>
-            {person.relationship && (
-              <p className="text-sm text-neutral-500">{person.relationship}</p>
-            )}
-          </div>
+    <div className="space-y-4">
+      {/* The same tile the patient sees, on the same breakpoints, so what the
+          caregiver is arranging looks like what they are arranging. The photo
+          is the point of the card on both sides -- a caregiver who cannot see
+          at a glance that a face is dark, cropped badly or of two people has
+          no reason to go and fix it.
+
+          These cards do not expand, so they stretch rather than starting: a
+          row of equal-height tiles with their controls on one line is easier
+          to scan than a ragged one. */}
+      <div className="grid gap-4 grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3">
+        {people.map((person) =>
+          editing === person.id ? (
+            // Full width while open. A ten-field form squeezed into a third
+            // of the row is a form nobody can fill in.
+            <div key={person.id} className="col-span-full">
+              <PersonForm
+                person={person}
+                onDone={() => {
+                  setEditing(null);
+                  onChanged();
+                }}
+                onCancel={() => setEditing(null)}
+              />
+            </div>
+          ) : (
+            <div
+              key={person.id}
+              className="flex flex-col h-full bg-white border border-neutral-200 rounded-xl overflow-hidden"
+            >
+              <div className="w-full aspect-[4/3] bg-neutral-100 overflow-hidden">
+                <PersonPhoto person={person} fill rounded={false} />
+              </div>
+              <div className="flex-1 px-4 pt-3 pb-3 min-w-0">
+                <p className="font-medium text-neutral-800 text-lg leading-tight break-words">
+                  {person.name}
+                </p>
+                <p className="text-sm text-neutral-500 mt-1">
+                  {/* What the card actually carries, so the caregiver can see at
+                      a glance which ones are still bare. A card with only a name
+                      can be revised but cannot be tested on. */}
+                  {summariseCard(person)}
+                </p>
+              </div>
+              {/* Both controls get a strip of their own, below a rule, with
+                  words on them. On the patient's side the whole tile is one
+                  tap target; here it is not, and the rule is what says so --
+                  neither of these two should ever be reachable by a stray tap
+                  on a face. */}
+              <div className="flex border-t border-neutral-200 divide-x divide-neutral-200">
+                <button
+                  onClick={() => setEditing(person.id)}
+                  aria-label={`Edit ${person.name}`}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3
+                    text-sm font-medium text-neutral-600 hover:text-primary-700
+                    hover:bg-neutral-50 transition-colors"
+                >
+                  <PencilSimple size={18} weight="regular" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(person.id)}
+                  aria-label={`Remove ${person.name}`}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-3
+                    text-sm font-medium text-neutral-600 hover:text-error
+                    hover:bg-neutral-50 transition-colors"
+                >
+                  <Trash size={18} weight="regular" />
+                  Remove
+                </button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      {editing === "new" ? (
+        <PersonForm
+          onDone={() => {
+            setEditing(null);
+            onChanged();
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      ) : (
+        editing === null && (
           <button
-            onClick={() => handleDelete(person.id)}
-            aria-label={`Remove ${person.name}`}
-            className="text-neutral-400 hover:text-error p-1"
+            onClick={() => setEditing("new")}
+            className="flex items-center gap-2 w-full justify-center text-sm text-primary-700 border border-dashed border-neutral-300 hover:border-primary-300 rounded-lg px-5 py-3.5 transition-colors"
           >
-            <Trash size={18} weight="regular" />
+            <Plus size={18} weight="regular" />
+            Add a person
           </button>
+        )
+      )}
+    </div>
+  );
+}
+
+/** "Your son · Teacher · Guwahati", or a nudge when there is nothing yet. */
+function summariseCard(person) {
+  const filled = filledFields(person);
+  if (filled.length === 0) return "Name only — add a few details";
+  return filled
+    .slice(0, 3)
+    .map((f) => f.value)
+    .join(" · ");
+}
+
+/**
+ * Add or edit one card.
+ *
+ * Every field except the name is optional and stays optional: the Test only
+ * asks about fields that are filled, so a half-filled card is a smaller
+ * question bank, never a broken one.
+ */
+function PersonForm({ person = null, onDone, onCancel }) {
+  const isEdit = person !== null;
+
+  const [name, setName] = useState(person?.name ?? "");
+  const [values, setValues] = useState(() =>
+    Object.fromEntries(PERSON_FIELDS.map((f) => [f.key, person?.[f.key] ?? ""]))
+  );
+  // undefined means "not touched", so saving an edit without picking a new
+  // file leaves the stored photo exactly where it is.
+  const [photo, setPhoto] = useState(undefined);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // The File object goes to Dexie as-is. A File IS a Blob, so there is no
+  // FileReader and no base64 step: IndexedDB stores the bytes, which is
+  // smaller than a data URL and skips a decode on every render.
+  const handlePhotoChange = (event) => {
+    setPhoto(event.target.files?.[0] ?? null);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || isSaving) return;
+
+    setIsSaving(true);
+    const card = { name: trimmed, ...values };
+    if (photo !== undefined) card.photo = photo;
+
+    if (isEdit) {
+      await updateVaultPerson(person.id, card);
+    } else {
+      await addVaultPerson(card);
+    }
+    setIsSaving(false);
+    onDone();
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white border border-neutral-200 rounded-lg px-5 py-4 space-y-4"
+    >
+      <div>
+        <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+          Name
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Rahul"
+          autoFocus
+          className="w-full px-4 py-2.5 rounded-lg border border-neutral-300 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
+        />
+      </div>
+
+      {PERSON_FIELDS.map((field) => (
+        <div key={field.key}>
+          <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+            {field.label}
+            <span className="ml-1.5 font-normal text-neutral-400">optional</span>
+          </label>
+          <input
+            type="text"
+            value={values[field.key]}
+            onChange={(e) =>
+              setValues((v) => ({ ...v, [field.key]: e.target.value }))
+            }
+            placeholder={field.placeholder}
+            className="w-full px-4 py-2.5 rounded-lg border border-neutral-300 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
+          />
         </div>
       ))}
 
-      {!showForm ? (
+      <div>
+        <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+          Photo <span className="font-normal text-neutral-400">optional</span>
+        </label>
+        <div className="flex items-center gap-3">
+          {/* Shows the stored photo on an edit, or the initial that the
+              patient will see if no photo is ever added. */}
+          <PersonPhoto
+            person={{
+              name,
+              photo: photo === undefined ? person?.photo ?? null : photo,
+            }}
+            size={44}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoChange}
+            className="text-sm text-neutral-600"
+          />
+        </div>
+        {isEdit && person?.photo && photo === undefined && (
+          <button
+            type="button"
+            onClick={() => setPhoto(null)}
+            className="mt-2 text-sm text-neutral-500 hover:text-error"
+          >
+            Remove photo
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 pt-1">
         <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 w-full justify-center text-sm text-primary-700 border border-dashed border-neutral-300 hover:border-primary-300 rounded-lg px-5 py-3.5 transition-colors"
+          type="submit"
+          disabled={!name.trim() || isSaving}
+          className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
         >
-          <Plus size={18} weight="regular" />
-          Add a person
+          {isSaving ? "Saving…" : "Save"}
         </button>
-      ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white border border-neutral-200 rounded-lg px-5 py-4 space-y-4"
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-sm text-neutral-500 hover:text-neutral-700 px-2 py-2.5"
         >
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-              Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Rahul"
-              autoFocus
-              className="w-full px-4 py-2.5 rounded-lg border border-neutral-300 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-              Relationship
-            </label>
-            <input
-              type="text"
-              value={relationship}
-              onChange={(e) => setRelationship(e.target.value)}
-              placeholder="e.g. Your grandson"
-              className="w-full px-4 py-2.5 rounded-lg border border-neutral-300 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-              Photo (optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              className="text-sm text-neutral-600"
-            />
-          </div>
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="submit"
-              disabled={!name.trim() || isSaving}
-              className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
-            >
-              {isSaving ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="text-sm text-neutral-500 hover:text-neutral-700 px-2 py-2.5"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

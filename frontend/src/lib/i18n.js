@@ -103,6 +103,35 @@ const strings = {
     mark_done: "Done",
     all_done_today: "Everything done for today",
 
+    // ── My People ──────────────────────────────────────────────────────────
+    // The card's field labels. `relationship` has one because the caregiver
+    // form needs it; the card itself prints the value ("Your son") straight
+    // under the name, where a label would only be in the way.
+    person_relationship: "Relationship",
+    person_age: "Age",
+    person_occupation: "What they do",
+    person_home: "Where they live",
+    person_spouse: "Married to",
+    person_children: "Children",
+    person_likes: "What they like",
+    person_favourite_food: "Favourite food",
+    person_visits: "How often they visit",
+    person_shared_memory: "Something you shared",
+
+    people_no_one_yet: "No one added yet",
+    people_caregiver_adds: "A caregiver can add family and friends here.",
+    people_tap_to_see: "Tap a name to see more",
+    people_test_start: "A few questions",
+    people_test_about: "About your family",
+
+    // The Test. Nothing here counts, ranks or corrects -- see the errorless
+    // rule. There is deliberately no "score", no "correct" and no "wrong" in
+    // this whole block.
+    q_who_is_this: "Who is this?",
+    q_what_do_they_do: (name) => `What does ${name} do?`,
+    q_where_do_they_live: (name) => `Where does ${name} live?`,
+    q_how_often_visit: (name) => `How often does ${name} visit?`,
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}. Welcome back. Choose an activity when you are ready.`,
@@ -195,6 +224,30 @@ const strings = {
     mark_done: "हो गया",
     all_done_today: "आज का सब कुछ हो गया",
 
+    // ── My People ──────────────────────────────────────────────────────────
+    // UNVERIFIED — needs native review, as above.
+    person_relationship: "रिश्ता",
+    person_age: "उम्र",
+    person_occupation: "वे क्या करते हैं",
+    person_home: "वे कहाँ रहते हैं",
+    person_spouse: "जीवनसाथी",
+    person_children: "बच्चे",
+    person_likes: "उन्हें क्या पसंद है",
+    person_favourite_food: "पसंदीदा खाना",
+    person_visits: "वे कितनी बार आते हैं",
+    person_shared_memory: "आपकी साझा याद",
+
+    people_no_one_yet: "अभी कोई नहीं जोड़ा गया",
+    people_caregiver_adds: "देखभालकर्ता यहाँ परिवार और दोस्तों को जोड़ सकते हैं।",
+    people_tap_to_see: "और देखने के लिए नाम पर टैप करें",
+    people_test_start: "कुछ सवाल",
+    people_test_about: "आपके परिवार के बारे में",
+
+    q_who_is_this: "यह कौन हैं?",
+    q_what_do_they_do: (name) => `${name} क्या करते हैं?`,
+    q_where_do_they_live: (name) => `${name} कहाँ रहते हैं?`,
+    q_how_often_visit: (name) => `${name} कितनी बार आते हैं?`,
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। वापसी पर स्वागत है। तैयार होने पर एक गतिविधि चुनें।`,
@@ -286,6 +339,30 @@ const strings = {
     nothing_today: "এতিয়া একো কৰিবলগীয়া নাই",
     mark_done: "হৈ গ'ল",
     all_done_today: "আজিৰ সকলো হৈ গ'ল",
+
+    // ── My People ──────────────────────────────────────────────────────────
+    // UNVERIFIED — needs native review, as above.
+    person_relationship: "সম্পৰ্ক",
+    person_age: "বয়স",
+    person_occupation: "তেওঁ কি কৰে",
+    person_home: "তেওঁ ক'ত থাকে",
+    person_spouse: "জীৱনসংগী",
+    person_children: "সন্তান",
+    person_likes: "তেওঁ কি ভাল পায়",
+    person_favourite_food: "প্ৰিয় খাদ্য",
+    person_visits: "তেওঁ কিমান সঘনাই আহে",
+    person_shared_memory: "আপোনালোকৰ সোঁৱৰণ",
+
+    people_no_one_yet: "এতিয়ালৈকে কাকো যোগ কৰা হোৱা নাই",
+    people_caregiver_adds: "যত্ন লওঁতাই ইয়াত পৰিয়াল আৰু বন্ধুক যোগ কৰিব পাৰে।",
+    people_tap_to_see: "অধিক চাবলৈ নামত টিপক",
+    people_test_start: "কেইটামান প্ৰশ্ন",
+    people_test_about: "আপোনাৰ পৰিয়ালৰ বিষয়ে",
+
+    q_who_is_this: "এওঁ কোন?",
+    q_what_do_they_do: (name) => `${name} কি কৰে?`,
+    q_where_do_they_live: (name) => `${name} ক'ত থাকে?`,
+    q_how_often_visit: (name) => `${name} কিমান সঘনাই আহে?`,
 
     // TTS phrases
     speak_greeting: (greeting) =>

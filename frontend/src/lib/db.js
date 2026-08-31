@@ -10,6 +10,8 @@ import Dexie from "dexie";
 
 import { DOMAINS, domainForGame } from "@shared/domains";
 import { clampLevel, levelOrNull } from "@shared/levels";
+import { PERSON_FIELD_KEYS } from "@shared/people";
+import { reconcilePatients, resolveActivePatient } from "@shared/patientSync";
 
 export const db = new Dexie("sahaay");
 
@@ -248,6 +250,96 @@ export async function getActivePatientId() {
 /** Sets which patient is active on this device (e.g. after tapping their name on Login). */
 export async function setActivePatientId(patientId) {
   await db.settings.put({ key: ACTIVE_PATIENT_KEY, value: patientId });
+}
+
+/** Forgets which patient is active, so the next read picks one afresh. */
+export async function clearActivePatientId() {
+  await db.settings.delete(ACTIVE_PATIENT_KEY);
+}
+
+// Every table that hangs off a patient. Used when a patient row is dropped or
+// two of them turn out to be the same person, so nothing is left pointing at
+// an id that no longer exists.
+const PATIENT_OWNED_TABLES = [
+  "gameSessions",
+  "difficultyState",
+  "domainLevels",
+  "itemHistory",
+  "playSessions",
+  "vaultPeople",
+  "vaultRoutineSteps",
+];
+
+/**
+ * Removes ghost patient rows and folds duplicates together.
+ *
+ * The decision of WHAT is a ghost lives in shared/patientSync.js and is
+ * driven by the server's own list; this only carries it out.
+ *
+ * Dropped rows take their sessions with them. That is not data loss in any
+ * meaningful sense: the patient no longer exists on the server, and sync
+ * resolves the remote patient by exactly the `serverId` that has gone, so
+ * every one of those rows is unsendable by definition. Leaving them behind
+ * just grows the queue forever.
+ *
+ * Duplicates are different -- the person is real, the device simply has two
+ * rows for them -- so their dependent rows are RE-POINTED at the survivor
+ * rather than deleted.
+ */
+export async function pruneGhostPatients(remoteIds) {
+  const local = await db.patients.toArray();
+  const { keep, drop, merge } = reconcilePatients(local, remoteIds);
+
+  const dropIds = drop.map((row) => row.id);
+  const goneIds = [...dropIds, ...merge.map((m) => m.from)];
+  const survivingIds = new Set(keep.map((row) => row.id));
+
+  // Nothing to do is the normal case, and this runs on every dashboard open.
+  // The sweep below walks seven tables unindexed, so it must not fire just
+  // because somebody looked at the screen.
+  if (goneIds.length === 0) return { dropped: 0, merged: 0 };
+
+  await db.transaction(
+    "rw",
+    db.patients,
+    db.settings,
+    ...PATIENT_OWNED_TABLES.map((name) => db[name]),
+    async () => {
+      for (const { from, to } of merge) {
+        for (const name of PATIENT_OWNED_TABLES) {
+          await db[name]
+            .where("patientId")
+            .equals(from)
+            .modify({ patientId: to });
+        }
+      }
+
+      await db.patients.bulkDelete(goneIds);
+
+      // Sweep anything left pointing at a patient row that is not there any
+      // more. The loop above covers the rows this pass removed; this also
+      // catches rows orphaned by an earlier build, which is the same class of
+      // stale local state as the ghost patients themselves. Keyed off the
+      // SURVIVING ids rather than the removed ones, so it cannot miss a
+      // generation nobody thought to look for.
+      for (const name of PATIENT_OWNED_TABLES) {
+        await db[name]
+          .filter((row) => !survivingIds.has(row.patientId))
+          .delete();
+      }
+    }
+  );
+
+  // A dangling active id is silent: getActivePatientId() returns it, and the
+  // dashboard then renders an empty shell for a patient who is gone.
+  const setting = await db.settings.get(ACTIVE_PATIENT_KEY);
+  const resolved = resolveActivePatient(setting?.value, keep);
+  if (resolved !== setting?.value) {
+    if (resolved === null) await clearActivePatientId();
+    else await setActivePatientId(resolved);
+  }
+
+  return { dropped: dropIds.length, merged: merge.length };
 }
 
 /**
@@ -572,26 +664,79 @@ export async function verifyCaregiverPin(pin) {
 // (SPEC_ADDENDUM_MEMORY_VAULT.md, Section 4)
 // ---------------------------------------------------------------------
 
-/** Adds a person to the active patient's Memory Vault. */
+/**
+ * The card's optional detail fields, defined once in shared/people.js.
+ *
+ * Adding a field there is the only step needed: it becomes storable, editable
+ * and (if the Test has a template for it) askable, with nothing to change
+ * here.
+ *
+ * None of these are indexed, so no schema version is needed for them. Dexie
+ * only wants a version bump when the INDEXES change, and nothing queries a
+ * card by favourite food.
+ */
+function cardFields(source = {}) {
+  const out = {};
+  for (const key of PERSON_FIELD_KEYS) {
+    const value = source[key];
+    // Undefined means "not supplied" on an edit and must not clobber a stored
+    // value; empty means "cleared" and is stored as "" so filledFields() drops
+    // it from the card.
+    if (value === undefined) continue;
+    out[key] = value === null ? "" : String(value).trim();
+  }
+  return out;
+}
+
+/**
+ * Adds a person to the active patient's My People cards.
+ *
+ * `photo` is a Blob (a File straight off an <input type="file"> is one).
+ * IndexedDB stores blobs natively, which is both smaller and faster than the
+ * base64 data URL this used to hold -- base64 costs a third more bytes and has
+ * to be decoded on every render. Legacy rows still hold data-URL strings, so
+ * every reader has to handle both; see PersonPhoto.
+ */
 export async function addVaultPerson({
   name,
-  relationship,
   photo = null,
   circle = 1,
+  // Defaults to whoever is active, which is what the caregiver form wants.
+  // Named explicitly by the demo seeder, which has to put cards on a
+  // particular patient rather than on whoever the device last opened.
+  patientId: forPatientId = null,
+  ...rest
 }) {
-  const patientId = await getActivePatientId();
+  const patientId = forPatientId ?? (await getActivePatientId());
   return db.vaultPeople.add({
     patientId,
-    name,
-    relationship,
+    name: String(name ?? "").trim(),
     photo,
     circle,
+    ...cardFields(rest),
     createdAt: new Date().toISOString(),
   });
 }
 
-export async function updateVaultPerson(id, changes) {
-  return db.vaultPeople.update(id, changes);
+/**
+ * Edits a card in place.
+ *
+ * Only the keys present in `changes` are touched. Passing no `photo` key
+ * leaves the stored photo alone, which is what lets the caregiver edit
+ * somebody's address without re-uploading their face.
+ */
+export async function updateVaultPerson(id, changes = {}) {
+  const patch = cardFields(changes);
+  if (changes.name !== undefined) patch.name = String(changes.name ?? "").trim();
+  if (changes.photo !== undefined) patch.photo = changes.photo;
+  if (changes.circle !== undefined) patch.circle = changes.circle;
+  patch.updatedAt = new Date().toISOString();
+  return db.vaultPeople.update(id, patch);
+}
+
+/** One card, by local id. */
+export async function getVaultPerson(id) {
+  return db.vaultPeople.get(id);
 }
 
 export async function deleteVaultPerson(id) {
@@ -601,7 +746,12 @@ export async function deleteVaultPerson(id) {
 /** Lists everyone in the active patient's Memory Vault. */
 export async function listVaultPeople() {
   const patientId = await getActivePatientId();
-  return db.vaultPeople.where("patientId").equals(patientId).toArray();
+  const rows = await db.vaultPeople.where("patientId").equals(patientId).toArray();
+  // Oldest first, so the list a patient learned does not reorder itself under
+  // them when a card is edited. IndexedDB makes no ordering promise on a
+  // non-index query, and "the cards moved" is a real confusion for someone
+  // navigating by position rather than by name.
+  return rows.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 
 /**

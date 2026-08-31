@@ -13,3 +13,17 @@ backend/.env
 # tools/normalise_item_images.py --apply. 17MB of 7000px originals; the
 # normalised 800px versions in public/items are what ships.
 frontend/items-originals/
+
+# Secrets and local databases, anywhere in the tree -- the rules above only
+# ever covered backend/. A key committed once stays in the history even after
+# it is deleted, so these are deliberately broad.
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+
+# Build output and local caches
+frontend/dist/
+.vite/
+.pytest_cache/

@@ -162,13 +162,26 @@ export async function getPatientProgress(patientId) {
 }
 
 /**
- * Pull the signed-in caregiver's patients from the server into Dexie.
+ * Pull the signed-in caregiver's patients from the server into Dexie, and
+ * clear out the ones the server no longer has.
  *
  * The dashboard and login list read IndexedDB only (offline-first), so a
  * caregiver signing in on a fresh device would otherwise see "No patients
  * yet" while GET /patients happily returns their patient. Upserts by
  * serverId; adopts a same-named local profile instead of duplicating it.
  * Safe to call on every dashboard open — offline it is a silent no-op.
+ *
+ * This used to be additive ONLY, and that was the bug behind the ghost list.
+ * Reseeding the backend issues fresh server ids, so the previous generation
+ * of rows stayed in Dexie with ids pointing at patients that no longer
+ * existed. After two reseeds the caregiver was reading twelve patients with
+ * five names appearing twice, while the doctor — who reads the server
+ * directly and keeps no local copy — correctly saw three.
+ *
+ * The prune runs ONLY when the remote list actually arrived. On the failure
+ * path below we return before it: an exception means offline or an expired
+ * token, and treating "I could not ask" as "you have no patients" would wipe
+ * the device's copy exactly when it is the only copy there is.
  */
 export async function hydratePatientsFromServer() {
   if (!getToken()) return [];
@@ -216,6 +229,11 @@ export async function hydratePatientsFromServer() {
       });
     }
   }
+
+  // Upsert first, prune second. Doing it the other way round would drop a row
+  // and immediately re-add it on the same pass.
+  const { pruneGhostPatients } = await import("./db");
+  await pruneGhostPatients(remote.map((patient) => patient.id));
 
   return remote;
 }
