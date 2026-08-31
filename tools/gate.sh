@@ -42,6 +42,7 @@ run "base levels + abandon path" "$PY" tools/test_base_levels.py
 run "item bank + rotation" node tools/test_item_bank.mjs
 run "session runner + gating" node tools/test_session_runner.mjs
 run "tailwind colours resolve" node tools/test_tailwind_colors.mjs
+run "voice: once, right language" node tools/test_voice.mjs
 
 echo
 if [ "$status" -ne 0 ]; then

@@ -2,8 +2,10 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, RequireRole } from "./lib/auth";
 
+import DevItems from "./pages/DevItems";
 import ItemPreview from "./pages/ItemPreview";
 import PlayDomain from "./pages/PlayDomain";
+import MyDay from "./pages/MyDay";
 import PlaySession from "./pages/PlaySession";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -29,6 +31,7 @@ function App() {
               of the app. The boundary that matters is patient vs caregiver,
               and that is the PIN plus the server's role checks. */}
           <Route path="/patient" element={<PatientHome />} />
+          <Route path="/patient/day" element={<MyDay />} />
           <Route path="/patient/vault" element={<MemoryVault />} />
 
           {/* One route for all six domains. The four /patient/game/* routes
@@ -64,6 +67,13 @@ function App() {
               Not patient-facing, nothing here is scored or logged.
               Remove once the six games exist and can be played directly. */}
           <Route path="/preview/items" element={<ItemPreview />} />
+
+          {/* DEV ONLY. Registered only in a development build, so the route
+              does not exist in production and a patient cannot reach a screen
+              that marks the correct answer. */}
+          {import.meta.env.DEV && (
+            <Route path="/dev/items" element={<DevItems />} />
+          )}
 
           <Route path="*" element={<Landing />} />
         </Routes>

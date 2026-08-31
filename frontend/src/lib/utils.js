@@ -138,6 +138,12 @@ export function prefersReducedMotion() {
  */
 export function speak(text, { rate = 0.9, pitch = 1, volume = 0.85, lang = "en-IN" } = {}) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  if (!text) return;
+
+  // Cancel whatever is still speaking. Without this the utterances QUEUE, and
+  // a patient who moves through three items hears three instructions stacked
+  // up, the last of them describing a screen that is no longer there.
+  window.speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = rate;

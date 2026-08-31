@@ -29,6 +29,7 @@ import {
 } from "@shared/sessionRules";
 
 import ItemStage from "../components/games/ItemStage";
+import { preloadItems } from "../lib/preload";
 import WaitingScreen from "../components/games/WaitingScreen";
 import {
   advancePlaySession,
@@ -79,6 +80,7 @@ export default function PlaySession() {
       if (gate.resumeId) {
         const existing = await getPlaySession(gate.resumeId);
         if (existing) {
+          await preloadItems(existing.items);
           sessionRef.current = existing;
           itemStartRef.current = Date.now();
           if (!cancelled) setState({ phase: "playing", session: existing, gate });
@@ -110,6 +112,12 @@ export default function PlaySession() {
         items,
         levels,
       });
+
+      // Warm the images BEFORE the first item paints. An <img> only starts
+      // fetching when it mounts, so without this a memory item spends part of
+      // its four-second exposure window on a blank grid -- and the exposure
+      // time is the measurement.
+      await preloadItems(row.items);
 
       sessionRef.current = row;
       itemStartRef.current = Date.now();

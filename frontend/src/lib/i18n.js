@@ -9,7 +9,10 @@
 //   const t = useT();
 //   t("welcome_back") // → "ঘৰলৈ স্বাগতম" if preferred_language === "as"
 
+import { useRef } from "react";
+
 import { useAuth } from "./auth";
+import { speak } from "./utils";
 
 const strings = {
   en: {
@@ -89,6 +92,12 @@ const strings = {
 
     next_games_at: (time) => `Next games at ${time}`,
     come_back_later: "You have played today. Come back later.",
+
+    my_day: "My Day",
+    my_day_desc: "Your medicines, water, meals and visits",
+    nothing_today: "Nothing to do right now",
+    mark_done: "Done",
+    all_done_today: "Everything done for today",
 
     // TTS phrases
     speak_greeting: (greeting) =>
@@ -174,6 +183,13 @@ const strings = {
     next_games_at: (time) => `अगले खेल ${time} बजे`,
     come_back_later: "आपने आज खेल लिया है। बाद में आइए।",
 
+    // UNVERIFIED — needs native review, as above.
+    my_day: "मेरा दिन",
+    my_day_desc: "आपकी दवाइयाँ, पानी, भोजन और मुलाक़ातें",
+    nothing_today: "अभी कुछ नहीं करना है",
+    mark_done: "हो गया",
+    all_done_today: "आज का सब कुछ हो गया",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। वापसी पर स्वागत है। तैयार होने पर एक गतिविधि चुनें।`,
@@ -258,6 +274,13 @@ const strings = {
     next_games_at: (time) => `পিছৰ খেল ${time} বজাত`,
     come_back_later: "আপুনি আজি খেলিছে। পিছত আহক।",
 
+    // UNVERIFIED — needs native review, as above.
+    my_day: "মোৰ দিন",
+    my_day_desc: "আপোনাৰ ঔষধ, পানী, আহাৰ আৰু সাক্ষাৎ",
+    nothing_today: "এতিয়া একো কৰিবলগীয়া নাই",
+    mark_done: "হৈ গ'ল",
+    all_done_today: "আজিৰ সকলো হৈ গ'ল",
+
     // TTS phrases
     speak_greeting: (greeting) =>
       `${greeting}। ঘৰলৈ স্বাগতম। আপুনি সাজু হ'লে এটা কাৰ্যকলাপ বাছনি কৰক।`,
@@ -266,6 +289,35 @@ const strings = {
     not_sure_who: "মই এতিয়াও নাজানো এইজন কোন।",
   },
 };
+
+/**
+ * Speak a phrase ONCE per `key`, in the patient's own language.
+ *
+ * Three bugs live in the naive version of this, and all three were shipped:
+ *
+ * 1. `useT()` returns a NEW function every render, so an effect with `t` in
+ *    its dependency array re-runs on every render and speaks again. The
+ *    instruction repeated several times per item.
+ * 2. `speak(text, langToLocale())` passes a STRING where an options object is
+ *    expected. Destructuring a string yields undefined for every option, so
+ *    `lang` fell back to "en-IN" -- the Assamese voice never once ran, no
+ *    matter what the patient's language was set to.
+ * 3. Nothing cancelled the previous utterance, so they queued.
+ *
+ * Pass a stable `key` (an item id, usually). The phrase is spoken when the key
+ * changes and never again for the same key.
+ */
+export function useSpeak() {
+  const { user } = useAuth();
+  const lang = user?.preferred_language || "en";
+  const spokenFor = useRef(null);
+
+  return function say(text, key) {
+    if (!text || spokenFor.current === key) return;
+    spokenFor.current = key;
+    speak(text, { lang: langToLocale(lang) });
+  };
+}
 
 /**
  * Maps a preferred_language code to a BCP-47 locale tag for the Web Speech API.

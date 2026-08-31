@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { speak } from "../lib/utils";
-import { isPreviewMode, listVaultRoutineSteps, setPreviewMode } from "../lib/db";
+import { isPreviewMode, setPreviewMode } from "../lib/db";
 import { useAuth } from "../lib/auth";
 import { useT, langToLocale } from "../lib/i18n";
 import {
@@ -24,8 +24,6 @@ export default function PatientHome() {
     return t("greeting_evening");
   });
 
-  const [routineSteps, setRoutineSteps] = useState([]);
-  const [isRoutineLoading, setIsRoutineLoading] = useState(true);
   const [preview, setPreview] = useState(() => isPreviewMode());
 
   // Soft voice greeting — once per browser session, not once per mount.
@@ -44,13 +42,14 @@ export default function PatientHome() {
       clearTimeout(timer);
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     };
-  }, [greeting, locale, t]);
+    // `t` is deliberately NOT a dependency. useT() returns a new function on
+    // every render, so including it re-runs this effect -- and the cleanup
+    // cancels the pending greeting while the sessionStorage flag is already
+    // set, so the greeting is silently lost rather than repeated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [greeting, locale]);
 
   useEffect(() => {
-    listVaultRoutineSteps().then((steps) => {
-      setRoutineSteps(steps);
-      setIsRoutineLoading(false);
-    });
   }, []);
 
   return (
@@ -96,34 +95,6 @@ export default function PatientHome() {
 
       {/* Main content */}
       <main className="px-5 pb-10">
-        {/* Daily Guidance — step-by-step day plan, replaces the old
-            static "no reminders" placeholder. Only shown once a caregiver
-            has actually set steps, per Rule 6 (no fake placeholder data). */}
-        {!isRoutineLoading && routineSteps.length > 0 && (
-          <div className="mb-8">
-            <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 mb-3">
-              <Sun size={16} weight="regular" />
-              {t("your_day")}
-            </h2>
-            <div className="bg-white border border-neutral-200 rounded-lg divide-y divide-neutral-100">
-              {routineSteps.map((step) => (
-                <div key={step.id} className="flex items-center gap-3 px-5 py-3">
-                  {step.time && (
-                    <span className="text-sm text-neutral-500 w-16 shrink-0">
-                      {step.time}
-                    </span>
-                  )}
-                  <span className="text-neutral-800">{step.activity}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <p className="text-neutral-600 mb-6">
-          {t("choose_activity")}
-        </p>
-
         {/* PLAY is the main thing, and it is one button. The five-card list
             that used to be here made the patient choose a game before they
             could start, which is a decision they should never have to make.
@@ -137,6 +108,17 @@ export default function PatientHome() {
           >
             {t("play")}
           </Link>
+
+          {/* THREE things, and only three: PLAY, My Day, My People. My Day is
+              a problem-statement requirement, not an extra -- reminders are
+              half of what the app is for, and it went missing when the old
+              five-card game list was replaced. */}
+          <ActivityCard
+            icon={Sun}
+            title={t("my_day")}
+            description={t("my_day_desc")}
+            to="/patient/day"
+          />
 
           <ActivityCard
             icon={Heart}

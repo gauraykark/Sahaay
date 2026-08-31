@@ -6,8 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useT, langToLocale } from "../../lib/i18n";
-import { speak } from "../../lib/utils";
+import { useSpeak, useT } from "../../lib/i18n";
 import RENDERERS from "./renderers";
 
 // How long the gentle correction stays up. Long enough to read, short enough
@@ -16,6 +15,7 @@ const CORRECTION_MS = 2200;
 
 export default function ItemStage({ item, onDone }) {
   const t = useT();
+  const say = useSpeak();
   const [correcting, setCorrecting] = useState(false);
   // Set in an effect, not during render: reading the clock while rendering is
   // impure, and the timing we want is "when the patient first saw this item"
@@ -53,7 +53,11 @@ export default function ItemStage({ item, onDone }) {
       // the patient's pick is left alone, and we move on. They should not be
       // able to tell they got it wrong.
       setCorrecting(true);
-      speak(t("lets_look_together"), langToLocale());
+      // useSpeak keys on the item, so the correction speaks once per item
+      // and in the patient's own language -- speak(text, langToLocale()) was
+      // passing a string where an options object goes, so every utterance in
+      // the games came out as en-IN regardless of the setting.
+      say(t("lets_look_together"), `correct-${item.id}`);
       setTimeout(finish, CORRECTION_MS);
     },
     [correcting, item, onDone, t]

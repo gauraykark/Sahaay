@@ -12,8 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { langToLocale } from "../../lib/i18n";
-import { speak } from "../../lib/utils";
+import { useSpeak } from "../../lib/i18n";
 
 // Ignore a second tap inside this window. Accidental double-taps are common
 // and would otherwise answer the next question too.
@@ -82,15 +81,16 @@ const shapeLabel = (t, key) => t(`shape_${key}`);
 function WhichDidYouSee({ item, t, correcting, onAnswer }) {
   const [stage, setStage] = useState("show");
   const answer = useDebouncedAnswer(onAnswer);
+  const say = useSpeak();
 
   useEffect(() => {
     setStage("show");
-    speak(t("remember_these"), langToLocale());
+    say(t("remember_these"), `${item.id}-show`);
     const a = setTimeout(() => setStage("gap"), item.show.durationMs);
     const b = setTimeout(
       () => {
         setStage("ask");
-        speak(t("ask_which_did_you_see"), langToLocale());
+        say(t("ask_which_did_you_see"), `${item.id}-ask`);
       },
       item.show.durationMs + item.gap.durationMs
     );
@@ -98,7 +98,8 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
       clearTimeout(a);
       clearTimeout(b);
     };
-  }, [item, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   if (stage === "show") {
     return (
@@ -145,9 +146,11 @@ function WhichDidYouSee({ item, t, correcting, onAnswer }) {
 
 function WhatIsThis({ item, t, correcting, onAnswer }) {
   const answer = useDebouncedAnswer(onAnswer);
+  const say = useSpeak();
+  // Once per item, never per render. See useSpeak for why this is a hook.
   useEffect(() => {
-    speak(t("ask_what_is_this"), langToLocale());
-  }, [item, t]);
+    say(t("ask_what_is_this"), item.id);
+  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -191,10 +194,12 @@ function WhatIsThis({ item, t, correcting, onAnswer }) {
 function HowAreTheyFeeling({ item, t, correcting, onAnswer }) {
   const answer = useDebouncedAnswer(onAnswer);
   const pronoun = t(item.person === "man" ? "he" : "she");
+  const say = useSpeak();
 
   useEffect(() => {
-    speak(t("ask_how_feeling", pronoun), langToLocale());
-  }, [item, t, pronoun]);
+    say(t("ask_how_feeling", pronoun), item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   return (
     <>
@@ -227,6 +232,7 @@ function HowAreTheyFeeling({ item, t, correcting, onAnswer }) {
 // and the score is taps-to-complete. Same signal, no punishment.
 
 function PutInOrder({ item, t, correcting, onAnswer }) {
+  const say = useSpeak();
   const [placed, setPlaced] = useState([]);
   const [hint, setHint] = useState(false);
   const tapsRef = useRef(0);
@@ -236,8 +242,9 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
     setPlaced(item.correctOrder.slice(0, item.prePlaced));
     tapsRef.current = 0;
     reportedRef.current = false;
-    speak(t("ask_put_in_order"), langToLocale());
-  }, [item, t]);
+    say(t("ask_put_in_order"), item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   const nextStep = item.correctOrder[placed.length];
 
@@ -282,7 +289,12 @@ function PutInOrder({ item, t, correcting, onAnswer }) {
             type="button"
             onClick={() => tap(step)}
             className={`px-8 py-6 rounded-2xl border-2 text-2xl text-left transition-transform ${
-              (hint || correcting) && step === nextStep
+              // showNextHint is the full-cue help: the next correct step is
+              // gently marked from the start, so a patient at the bottom of
+              // the scale cannot get stuck. `hint` is the same mark shown
+              // briefly after a tap that was not the next step -- which does
+              // nothing else at all. Neither is a failure signal.
+              (hint || correcting || item.showNextHint) && step === nextStep
                 ? "border-primary-500 bg-teal-50 scale-105"
                 : "border-neutral-300 bg-white"
             }`}
@@ -322,9 +334,11 @@ function ShapeGlyph({ name, size, rotation = 0 }) {
 
 function MatchTheShape({ item, t, correcting, onAnswer }) {
   const answer = useDebouncedAnswer(onAnswer);
+  const say = useSpeak();
+  // Once per item, never per render. See useSpeak for why this is a hook.
   useEffect(() => {
-    speak(t("ask_match_shape"), langToLocale());
-  }, [item, t]);
+    say(t("ask_match_shape"), item.id);
+  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -362,6 +376,7 @@ function MatchTheShape({ item, t, correcting, onAnswer }) {
 // response inhibition, which reaction time alone does not.
 
 function GoNoGo({ item, t, onAnswer }) {
+  const say = useSpeak();
   const [step, setStep] = useState(0);
   const [flash, setFlash] = useState(false);
   const hitsRef = useRef({ correct: 0, total: 0 });
@@ -372,8 +387,9 @@ function GoNoGo({ item, t, onAnswer }) {
     hitsRef.current = { correct: 0, total: 0 };
     doneRef.current = false;
     setStep(0);
-    speak(t("ask_tap_green"), langToLocale());
-  }, [item, t]);
+    say(t("ask_tap_green"), item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   useEffect(() => {
     if (doneRef.current || step >= item.order.length) return;

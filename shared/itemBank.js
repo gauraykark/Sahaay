@@ -245,6 +245,40 @@ const ROUTINES = [
   ["Wake up", "Say good morning", "Open the window", "Look outside"],
   ["Collect the plates", "Wash them", "Dry them", "Stack them"],
   ["Change into night clothes", "Take night medicine", "Switch off the light", "Go to sleep"],
+
+  // Longer sequences for the upper half of the scale. Without these the
+  // domain plateaued at four steps from about level 4, because the formula
+  // asks for more steps than the bank could offer and min() silently capped
+  // it -- the level stopped discriminating exactly where it needs to.
+  [
+    "Wake up", "Brush teeth", "Have a bath", "Get dressed",
+    "Have breakfast", "Take morning medicine",
+  ],
+  [
+    "Fill the pot with water", "Wash the rice", "Light the stove",
+    "Cook the rice", "Turn off the stove", "Serve the rice",
+  ],
+  [
+    "Take the bag", "Walk to the market", "Choose the vegetables",
+    "Pay the shopkeeper", "Carry the bag home", "Put them away",
+  ],
+  [
+    "Wake up", "Open the window", "Have tea", "Read the newspaper",
+    "Have breakfast", "Go for a walk", "Rest",
+  ],
+  [
+    "Collect the dirty clothes", "Fill the bucket", "Add the soap",
+    "Wash the clothes", "Rinse them", "Hang them out to dry",
+    "Bring them in", "Fold them",
+  ],
+  [
+    "Boil the water", "Add the tea leaves", "Add the milk", "Add sugar",
+    "Let it boil", "Strain it", "Pour into cups", "Serve the guests",
+  ],
+  [
+    "Wake up", "Brush teeth", "Have tea", "Have a bath", "Get dressed",
+    "Have breakfast", "Take morning medicine", "Go for a walk", "Rest",
+  ],
 ];
 
 function executiveItems() {
@@ -252,10 +286,22 @@ function executiveItems() {
     id: `exe-${pad(i + 1)}`,
     domain: "executive",
     template: "put-in-order",
-    // Short routines are only offered low; long ones only higher up. This is
-    // the one place minLevel/maxLevel does real work, because a 3-step routine
-    // is not a level-15 question however it is presented.
-    minLevel: steps.length >= 4 ? MIN_LEVEL : MIN_LEVEL,
+    // This is the one domain where minLevel/maxLevel does real work: a
+    // three-step routine is not a level-15 question however it is presented,
+    // and a nine-step one is cruel at level 0. Bounds follow length.
+    //
+    // The formula wants 2 + floor(level/2) steps, so a routine of length N is
+    // the right size around level 2*(N-2). Short routines are barred from the
+    // top of the scale by minLevel.
+    //
+    // There is NO upper bound on a long routine, though. A symmetric band left
+    // just three of twenty-seven routines eligible at level 15, which the
+    // review page made obvious -- a rotation pool of three means a level-15
+    // patient sees the same routine every other day and memorises it, which is
+    // exactly what the 14-day rule exists to prevent. buildExecutive already
+    // trims a long routine down to the level's step count, so offering it low
+    // costs nothing; offering too few high costs the measurement.
+    minLevel: Math.max(MIN_LEVEL, 2 * (steps.length - 2) - 6),
     maxLevel: MAX_LEVEL,
     steps,
   }));
@@ -263,9 +309,17 @@ function executiveItems() {
 
 function buildExecutive(item, level) {
   const d = difficultyFor(level);
-  // Level decides how much of the sequence is asked for, and how much help.
-  const count = Math.max(2, Math.min(2 + Math.floor(level / 2), item.steps.length));
+
+  // At least THREE steps, always. Two steps with the first pre-placed left a
+  // single tappable option -- there was no ordering decision to make, so the
+  // item measured nothing and looked broken to the patient.
+  const MIN_STEPS = 3;
+  const count = Math.max(
+    Math.min(MIN_STEPS, item.steps.length),
+    Math.min(2 + Math.floor(level / 2), item.steps.length)
+  );
   const steps = item.steps.slice(0, count);
+
   return {
     ...item,
     level,
@@ -276,8 +330,11 @@ function buildExecutive(item, level) {
     display: seededShuffle(steps, 6000 + level + item.steps.length),
     correctOrder: steps,
     cueLevel: d.cueLevel,
-    // At full cue the first step is already placed.
-    prePlaced: d.cueLevel === "full" ? 1 : 0,
+    // Nothing is pre-placed any more. At full cue the NEXT correct step is
+    // highlighted instead -- the patient still cannot fail, and every step
+    // stays tappable, so the task exists at every level.
+    prePlaced: 0,
+    showNextHint: d.cueLevel === "full",
   };
 }
 
@@ -349,6 +406,12 @@ const BANKS = {
   executive: executiveItems(),
 };
 
+
+const GENERATORS = {
+  attention: generateAttention,
+  perceptual_motor: generatePerceptualMotor,
+};
+
 const BUILDERS = {
   memory: buildMemory,
   language: buildLanguage,
@@ -356,10 +419,19 @@ const BUILDERS = {
   executive: buildExecutive,
 };
 
-const GENERATORS = {
-  attention: generateAttention,
-  perceptual_motor: generatePerceptualMotor,
-};
+/**
+ * Build one specific bank entry at a level, bypassing selection.
+ *
+ * selectItem() picks; this shapes a chosen entry. The review tool needs the
+ * second without the first -- going through selectItem to reach a named item
+ * silently returns a different one when that item is out of range at the
+ * level, which showed up as duplicate ids in the listing.
+ */
+export function buildItemById(domain, id, level) {
+  const entry = bankFor(domain).find((i) => i.id === id);
+  if (!entry) return null;
+  return BUILDERS[domain](entry, level);
+}
 
 /** True when a domain draws from a stored bank rather than a generator. */
 export const isBanked = (domain) => domain in BANKS;
